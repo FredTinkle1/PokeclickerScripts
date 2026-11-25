@@ -718,20 +718,46 @@ class AutomationFocus
      */
     static __internal__buildShinyPanel(parent)
     {
+        // Independent of the automation sidebar and its settings popouts.
+        const wrapper = document.createElement("details");
+        wrapper.id = "automationShinyHuntingOverlay";
+        wrapper.open = true;
+        Object.assign(wrapper.style, {
+            position: "fixed",
+            left: "10px",
+            top: "60px",
+            width: "240px",
+            maxWidth: "calc(100vw - 20px)",
+            boxSizing: "border-box",
+            backgroundColor: "#444444",
+            color: "#eeeeee",
+            border: "1px solid #aaaaaa",
+            borderRadius: "5px",
+            fontFamily: "inherit",
+            fontSize: "12px",
+            lineHeight: "1.4",
+            textAlign: "left",
+            zIndex: "999"
+        });
+        const title = document.createElement("summary");
+        title.textContent = "Shiny Hunting";
+        Object.assign(title.style, {
+            cursor: "pointer", padding: "8px 10px", fontWeight: "bold"
+        });
+        wrapper.appendChild(title);
+
         const panel = document.createElement("div");
-
         panel.id = "automationShinyHuntingPanel";
-        panel.style.margin = "8px";
-        panel.style.padding = "8px";
-        panel.style.border = "1px solid #777";
-        panel.style.borderRadius = "5px";
-        panel.style.textAlign = "left";
-        panel.style.fontSize = "12px";
-
+        Object.assign(panel.style, {
+            padding: "8px 10px",
+            maxHeight: "calc(100vh - 115px)",
+            overflowY: "auto",
+            boxSizing: "border-box",
+            borderTop: "1px solid #777"
+        });
+        wrapper.appendChild(panel);
+        document.body.appendChild(wrapper);
         this.__internal__shinyPanel = panel;
-
-        parent.appendChild(panel);
-
         this.__internal__updateShinyPanelVisibility();
     }
 
@@ -751,6 +777,7 @@ class AutomationFocus
         const shinySelected =
             this.__internal__focusSelectElem.value === "Shinies";
 
+        panel.parentElement.hidden = !shinySelected;
         panel.hidden = !shinySelected;
 
         if (!shinySelected)
@@ -769,7 +796,6 @@ class AutomationFocus
         {
             panel.innerHTML =
                 '<div style="text-align:center;">' +
-                '<strong>Shiny Hunting</strong><br>' +
                 'Enable Focus to begin hunting.' +
                 '</div>';
 
@@ -830,8 +856,8 @@ class AutomationFocus
             ? Math.floor(caught / total * 100)
             : 100;
 
-        const regionName =
-            GameConstants.Region[route.region] || route.region;
+        const rawRegion = String(GameConstants.Region[route.region] ?? route.region);
+        const regionName = rawRegion.charAt(0).toUpperCase() + rawRegion.slice(1);
 
         const routeName =
             route.routeName || `Route ${route.number}`;
@@ -854,12 +880,8 @@ class AutomationFocus
 
         let html = `
             <div style="text-align:center;">
-                <strong style="font-size:14px;">
-                    Shiny Hunting
-                </strong>
-                <br>
                 <strong>
-                    ${regionName} - ${routeName}
+                    ${routeName.toLowerCase().startsWith(regionName.toLowerCase()) ? routeName : `${regionName} - ${routeName}`}
                 </strong>
             </div>
 
@@ -883,7 +905,7 @@ class AutomationFocus
             </div>
 
             <div style="
-                max-height:240px;
+                max-height:200px;
                 overflow-y:auto;
             ">
         `;
@@ -919,6 +941,8 @@ class AutomationFocus
                         display:flex;
                         align-items:center;
                         min-width:0;
+                        flex:1;
+                        overflow-wrap:anywhere;
                     ">
                         <img
                             src="assets/images/pokemon/shiny/${pokemon.id}.png"
@@ -932,6 +956,7 @@ class AutomationFocus
                         color:${color};
                         font-weight:bold;
                         white-space:nowrap;
+                        flex-shrink:0;
                         margin-left:5px;
                     ">
                         ${symbol} ${status}
