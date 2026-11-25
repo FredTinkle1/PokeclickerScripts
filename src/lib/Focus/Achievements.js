@@ -31,7 +31,7 @@ class AutomationFocusAchievements
                        + Automation.Menu.TooltipSeparator
                        + "This feature handles the following achievements:\n"
                        + "Route Kill, Clear Gym and Clear Dungeon\n"
-                       + "The achievements will be completed in region order.\n"
+                       + "The achievements will be completed in selected region order.\n"
                        + "The current achievement will be pinned to the tracker, if unlocked",
                 run: function() { this.__internal__start(); }.bind(this),
                 stop: function() { this.__internal__stop(); }.bind(this),
@@ -68,6 +68,7 @@ class AutomationFocusAchievements
 
         // Build the achievement selection settings
         this.__internal__buildAchievementSelectionSettings(parent);
+        this.__internal__buildRegionSettings(parent);
     }
 
     /*********************************************************************\
@@ -76,6 +77,99 @@ class AutomationFocusAchievements
 
     static __internal__achievementLoop = null;
     static __internal__currentAchievement = null;
+    static __internal__regionSelectionChanged = false;
+
+    static __internal__regionStorageKey(category)
+    {
+        return `Focus-Achievements-Region-${category}-Enabled`;
+    }
+
+    static __internal__isRegionEnabled(achievement)
+    {
+        return Automation.Utils.LocalStorage.getValue(
+            this.__internal__regionStorageKey(achievement.category.name)
+        ) !== "false";
+    }
+
+    static __internal__buildRegionSettings(parent)
+    {
+        const section = document.createElement("div");
+        section.style.marginTop = "10px";
+        section.style.textAlign = "left";
+        const title = document.createElement("strong");
+        title.textContent = "Achievement regions";
+        section.appendChild(title);
+        const description = document.createElement("div");
+        description.textContent = "Only enabled regions are targeted, in region order.";
+        description.style.fontSize = "12px";
+        section.appendChild(description);
+
+        const categories = [...new Set(this.__internal__filteredAchievementList
+            .map(achievement => achievement.category.name))];
+        categories.sort((a, b) =>
+            this.__internal__getRegionFromCategoryName(a) -
+            this.__internal__getRegionFromCategoryName(b) || a.localeCompare(b));
+
+        const list = document.createElement("div");
+        list.classList.add("automationTabSubContent");
+        list.style.maxHeight = "160px";
+        list.style.overflowY = "auto";
+        section.appendChild(list);
+
+        const controls = [];
+        const changeSelection = () =>
+        {
+            this.__internal__regionSelectionChanged = true;
+        };
+        for (const category of categories)
+        {
+            const key = this.__internal__regionStorageKey(category);
+            Automation.Utils.LocalStorage.setDefaultValue(key, true);
+            const label = document.createElement("label");
+            label.style.display = "flex";
+            label.style.alignItems = "center";
+            label.style.gap = "8px";
+            label.style.margin = "2px 5px";
+            const checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.checked = Automation.Utils.LocalStorage.getValue(key) !== "false";
+            checkbox.addEventListener("change", () =>
+            {
+                Automation.Utils.LocalStorage.setValue(key, checkbox.checked);
+                changeSelection();
+            });
+            label.appendChild(checkbox);
+            const name = category === "magikarpJump" ? "Magikarp Jump"
+                : category === "sevii" ? "Sevii Islands"
+                : category.charAt(0).toUpperCase() + category.slice(1);
+            label.appendChild(document.createTextNode(name));
+            list.appendChild(label);
+            controls.push({ key, checkbox });
+        }
+
+        const actions = document.createElement("div");
+        actions.style.display = "flex";
+        actions.style.gap = "5px";
+        for (const enabled of [true, false])
+        {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "btn btn-sm btn-secondary";
+            button.textContent = enabled ? "Select all" : "Clear all";
+            button.addEventListener("click", () =>
+            {
+                for (const { key, checkbox } of controls)
+                {
+                    checkbox.checked = enabled;
+                    Automation.Utils.LocalStorage.setValue(key, enabled);
+                }
+                changeSelection();
+            });
+            actions.appendChild(button);
+        }
+        section.appendChild(actions);
+        parent.appendChild(section);
+    }
 
     /**
      * @brief Builds the achivement selection settings
@@ -187,6 +281,7 @@ class AutomationFocusAchievements
      */
     static __internal__start()
     {
+        this.__internal__regionSelectionChanged = false;
         // Set achievement loop
         this.__internal__achievementLoop = setInterval(this.__internal__focusOnAchievements.bind(this), 1000); // Runs every second
         this.__internal__focusOnAchievements();
@@ -218,6 +313,19 @@ class AutomationFocusAchievements
      */
     static __internal__focusOnAchievements()
     {
+        // Finish the active dungeon safely before changing regions.
+        if (this.__internal__regionSelectionChanged)
+        {
+            Automation.Dungeon.stopAfterThisRun();
+            if (Automation.Utils.isInInstanceState())
+            {
+                return;
+            }
+            Automation.Menu.forceAutomationState(Automation.Gym.Settings.FeatureEnabled, false);
+            this.__internal__currentAchievement = null;
+            this.__internal__regionSelectionChanged = false;
+        }
+
         // Already fighting, nothing to do for now
         if (Automation.Utils.isInInstanceState())
         {
@@ -254,7 +362,7 @@ class AutomationFocusAchievements
             {
                 // No more achievements, stop the feature
                 Automation.Menu.forceAutomationState(Automation.Focus.Settings.FeatureEnabled, false);
-                Automation.Notifications.sendWarningNotif("No more achievement to automate.\nTurning the feature off", "Focus");
+                Automation.Notifications.sendWarningNotif("No more available achievements in selected regions.\nTurning the feature off", "Focus");
 
                 return;
             }
@@ -402,6 +510,12 @@ class AutomationFocusAchievements
                 // Only handle achievable achievements
                 if (!achievement.achievable()
                     || (achievement.property.region > player.highestRegion()))
+                {
+                    return false;
+                }
+
+                // Only target explicitly enabled achievement regions.
+                if (!this.__internal__isRegionEnabled(achievement))
                 {
                     return false;
                 }
