@@ -6,6 +6,16 @@ This file records custom changes to this fork of [Farigh/pokeclicker-automation]
 
 Entries are in reverse commit order. Dates identify the development session, not necessarily the Git commit's timezone.
 
+### Standalone Auto Purify
+
+**Added** · [Module](https://github.com/FredTinkle1/PokeclickerScripts/commit/9618b6b21cbbcad3b814023de4469e8a6d20f665) · [Loader](https://github.com/FredTinkle1/PokeclickerScripts/commit/d3ee270c0fa2d90b62de5b4409fcaef3074c6210) · [Menu integration](https://github.com/FredTinkle1/PokeclickerScripts/commit/52fa2cf54b9769a28981eb193b15f038075ae1ce)
+
+- Added a separate Auto Purify toggle immediately below Auto Shop and above Auto Upgrade.
+- Disabled by default; persistent setting independent of shopping and focus.
+- Uses the native Purify Chamber unlock and flow checks every two seconds, retaining a valid current selection and automatically selecting the next unpurified Shadow Pokémon.
+- Does not move the player or change battle, shop or focus settings. Waits for future Shadow Pokémon when none remain.
+- Verified API against PokéClicker v0.10.26 source; live game testing pending.
+
 ### Achievement region selection
 **Added** · [89b77cd](https://github.com/FredTinkle1/PokeclickerScripts/commit/89b77cdcf21651bc2a8a9691fbe4a95eacf82638) · `src/lib/Focus/Achievements.js`
 
