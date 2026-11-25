@@ -225,6 +225,9 @@ class AutomationFocus
     static __internal__lockedFunctionalities = [];
 
     static __internal__lastFocusData = null;
+    static __internal__shinyPanel = null;
+    static __internal__shinyPanelLastContent = null;
+    static __internal__shinyHuntComplete = false;
 
     /**
      * @brief Builds the menu
@@ -271,6 +274,9 @@ class AutomationFocus
 
         // Toggle the 'Focus on' loop on click
         focusButton.addEventListener("click", this.__internal__toggleFocus.bind(this), false);
+
+        // Build the shiny hunting status panel
+        this.__internal__buildShinyPanel(focusContainer);
 
         // Build advanced settings
         this.__internal__buildAdvancedSettings(focusContainer);
@@ -469,6 +475,28 @@ class AutomationFocus
                 refreshRateAsMs: 3000 // Refresh every 3s
             });
 
+        this.__internal__functionalities.push(
+            {
+                id: "Shinies",
+                name: "Shinies",
+                tooltip: "Automatically hunts missing shiny Pokémon."
+                       + Automation.Menu.TooltipSeparator
+                       + "Moves to the first accessible route with missing shinies.\n"
+                       + "Automatically advances when all route shinies are caught.\n"
+                       + "Roaming Pokémon are excluded.",
+                run: function()
+                {
+                    this.__internal__huntMissingShinies();
+                }.bind(this),
+                stop: function()
+                {
+                    this.__internal__updateShinyPanelVisibility();
+                }.bind(this),
+                refreshRateAsMs: 3000
+            });
+
+
+        
         this.Quests.__registerFunctionalities(this.__internal__functionalities);
         this.Achievements.__registerFunctionalities(this.__internal__functionalities);
         this.PokerusCure.__registerFunctionalities(this.__internal__functionalities);
@@ -612,6 +640,8 @@ class AutomationFocus
 
         // Save the last selected topic
         Automation.Utils.LocalStorage.setValue(this.Settings.FocusedTopic, this.__internal__focusSelectElem.value);
+        this.__internal__shinyHuntComplete = false;
+        this.__internal__updateShinyPanelVisibility();
     }
 
     /**
@@ -681,4 +711,364 @@ class AutomationFocus
             }
         }
     }
+
+    
+    /**
+     * Builds the shiny hunting status panel.
+     */
+    static __internal__buildShinyPanel(parent)
+    {
+        const panel = document.createElement("div");
+
+        panel.id = "automationShinyHuntingPanel";
+        panel.style.margin = "8px";
+        panel.style.padding = "8px";
+        panel.style.border = "1px solid #777";
+        panel.style.borderRadius = "5px";
+        panel.style.textAlign = "left";
+        panel.style.fontSize = "12px";
+
+        this.__internal__shinyPanel = panel;
+
+        parent.appendChild(panel);
+
+        this.__internal__updateShinyPanelVisibility();
+    }
+
+    /**
+     * Shows or hides the panel depending on the selected
+     * focus mode.
+     */
+    static __internal__updateShinyPanelVisibility()
+    {
+        const panel = this.__internal__shinyPanel;
+
+        if (!panel)
+        {
+            return;
+        }
+
+        const shinySelected =
+            this.__internal__focusSelectElem.value === "Shinies";
+
+        panel.hidden = !shinySelected;
+
+        if (!shinySelected)
+        {
+            panel.innerHTML = "";
+            this.__internal__shinyPanelLastContent = null;
+            return;
+        }
+
+        const enabled =
+            Automation.Utils.LocalStorage.getValue(
+                this.Settings.FeatureEnabled
+            ) === "true";
+
+        if (!enabled && !this.__internal__shinyHuntComplete)
+        {
+            panel.innerHTML =
+                '<div style="text-align:center;">' +
+                '<strong>Shiny Hunting</strong><br>' +
+                'Enable Focus to begin hunting.' +
+                '</div>';
+
+            this.__internal__shinyPanelLastContent = null;
+        }
+    }
+
+    /**
+     * Gets the normally encounterable Pokémon on a route
+     * and determines whether each has been caught shiny.
+     */
+    static __internal__getRouteShinyStatus(route)
+    {
+        const pokemonNames = [...new Set(
+            RouteHelper.getAvailablePokemonList(
+                route.number,
+                route.region
+            )
+        )];
+
+        return pokemonNames.map(name =>
+        {
+            const pokemon = PokemonHelper.getPokemonByName(name);
+
+            return {
+                name: name,
+                id: pokemon.id,
+                caught: App.game.party.alreadyCaughtPokemon(
+                    pokemon.id,
+                    true
+                )
+            };
+        });
+    }
+
+    /**
+     * Updates the panel with the current route and its
+     * shiny capture progress.
+     */
+    static __internal__updateShinyPanel(route, pokemonList)
+    {
+        const panel = this.__internal__shinyPanel;
+
+        if (!panel)
+        {
+            return;
+        }
+
+        const total = pokemonList.length;
+
+        const caught = pokemonList.filter(
+            pokemon => pokemon.caught
+        ).length;
+
+        const missing = total - caught;
+
+        const percentage = total > 0
+            ? Math.floor(caught / total * 100)
+            : 100;
+
+        const regionName =
+            GameConstants.Region[route.region] || route.region;
+
+        const routeName =
+            route.routeName || `Route ${route.number}`;
+
+        const displayKey = JSON.stringify({
+            region: route.region,
+            route: route.number,
+            pokemon: pokemonList
+        });
+
+        // Avoid rebuilding the panel unnecessarily.
+        if (displayKey === this.__internal__shinyPanelLastContent)
+        {
+            return;
+        }
+
+        this.__internal__shinyPanelLastContent = displayKey;
+
+        panel.hidden = false;
+
+        let html = `
+            <div style="text-align:center;">
+                <strong style="font-size:14px;">
+                    Shiny Hunting
+                </strong>
+                <br>
+                <strong>
+                    ${regionName} - ${routeName}
+                </strong>
+            </div>
+
+            <div style="margin-top:8px;text-align:center;">
+                ${caught} / ${total} shinies caught (${percentage}%)
+            </div>
+
+            <div style="
+                width:100%;
+                height:10px;
+                background:#777;
+                border-radius:5px;
+                overflow:hidden;
+                margin:5px 0 8px 0;
+            ">
+                <div style="
+                    width:${percentage}%;
+                    height:100%;
+                    background:#28a745;
+                "></div>
+            </div>
+
+            <div style="
+                max-height:240px;
+                overflow-y:auto;
+            ">
+        `;
+
+        // Show missing Pokémon first.
+        const sortedPokemon = [...pokemonList].sort(
+            (a, b) => Number(a.caught) - Number(b.caught)
+        );
+
+        for (const pokemon of sortedPokemon)
+        {
+            const color = pokemon.caught
+                ? "#28a745"
+                : "#dc3545";
+
+            const status = pokemon.caught
+                ? "Caught"
+                : "Missing";
+
+            const symbol = pokemon.caught
+                ? "&#10003;"
+                : "&#10007;";
+
+            html += `
+                <div style="
+                    display:flex;
+                    align-items:center;
+                    justify-content:space-between;
+                    padding:3px 0;
+                    border-bottom:1px solid rgba(128,128,128,0.2);
+                ">
+                    <div style="
+                        display:flex;
+                        align-items:center;
+                        min-width:0;
+                    ">
+                        <img
+                            src="assets/images/pokemon/shiny/${pokemon.id}.png"
+                            style="width:28px;height:28px;margin-right:5px;"
+                            onerror="this.style.display='none';"
+                        >
+                        <span>${pokemon.name}</span>
+                    </div>
+
+                    <span style="
+                        color:${color};
+                        font-weight:bold;
+                        white-space:nowrap;
+                        margin-left:5px;
+                    ">
+                        ${symbol} ${status}
+                    </span>
+                </div>
+            `;
+        }
+
+        html += `
+            </div>
+
+            <div style="
+                margin-top:8px;
+                text-align:center;
+            ">
+                <strong>${missing} shinies remaining</strong>
+                <br>
+                <small>Roaming Pokémon excluded</small>
+            </div>
+        `;
+
+        panel.innerHTML = html;
+    }
+
+    /**
+     * Finds the first accessible route with missing shinies
+     * and automatically battles on that route.
+     */
+    static __internal__huntMissingShinies()
+    {
+        this.__internal__shinyHuntComplete = false;
+
+        if (!this.__ensureNoInstanceIsInProgress())
+        {
+            return;
+        }
+
+        // Search regions in order, then ascending route number.
+        const routes = [...Routes.regionRoutes].sort(
+            (a, b) =>
+                (a.region - b.region) ||
+                (a.number - b.number)
+        );
+
+        for (const route of routes)
+        {
+            // Skip inaccessible routes.
+            if (!Automation.Utils.Route.canMoveToRoute(
+                route.number,
+                route.region,
+                route
+            ))
+            {
+                continue;
+            }
+
+            const pokemonList =
+                this.__internal__getRouteShinyStatus(route);
+
+            if (pokemonList.length === 0)
+            {
+                continue;
+            }
+
+            const missingShinies = pokemonList.filter(
+                pokemon => !pokemon.caught
+            );
+
+            // Skip completed routes.
+            if (missingShinies.length === 0)
+            {
+                continue;
+            }
+
+            // Move only when not already on the desired route.
+            if (
+                player.route !== route.number ||
+                player.region !== route.region ||
+                App.game.gameState !== GameConstants.GameState.fighting
+            )
+            {
+                Automation.Utils.Route.moveToRoute(
+                    route.number,
+                    route.region
+                );
+            }
+
+            // Enable the existing Auto attack feature.
+            if (
+                Automation.Utils.LocalStorage.getValue(
+                    Automation.Click.Settings.FeatureEnabled
+                ) !== "true"
+            )
+            {
+                Automation.Menu.forceAutomationState(
+                    Automation.Click.Settings.FeatureEnabled,
+                    true
+                );
+            }
+
+            // Update the live shiny tracking panel.
+            this.__internal__updateShinyPanel(
+                route,
+                pokemonList
+            );
+
+            // Remain on this route until every shiny is caught.
+            return;
+        }
+
+        // No accessible routes have missing shinies.
+        this.__internal__shinyHuntComplete = true;
+        this.__internal__shinyPanelLastContent = null;
+
+        if (this.__internal__shinyPanel)
+        {
+            this.__internal__shinyPanel.innerHTML = `
+                <div style="text-align:center;">
+                    <strong style="color:#28a745;">
+                        Shiny Hunting Complete
+                    </strong>
+                    <br><br>
+                    All accessible route shinies have been caught!
+                </div>
+            `;
+        }
+
+        // Stop the focus loop.
+        Automation.Menu.forceAutomationState(
+            this.Settings.FeatureEnabled,
+            false
+        );
+
+        Automation.Notifications.sendWarningNotif(
+            "All accessible route shinies have been caught!",
+            "Focus"
+        );
+    }
+
 }
