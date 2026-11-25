@@ -66,8 +66,20 @@ class AutomationUtilsLocalStorage
      * @returns The save specific automation local storage key
      */
     static __internal__getSaveSpecificKey(key)
+{
+    const globalKey = `Automation-Global-${key}`;
+    const oldKey = `Automation-${Save.key}-${key}`;
+
+    // Migrate existing settings to global storage
+    if (localStorage.getItem(globalKey) === null)
     {
-        // Always prepend 'Automation' and the pokeclicker save unique id
-        return `Automation-${Save.key}-${key}`;
+        const oldValue = localStorage.getItem(oldKey);
+
+        if (oldValue !== null)
+        {
+            localStorage.setItem(globalKey, oldValue);
+        }
     }
+
+    return globalKey;
 }
