@@ -13,6 +13,7 @@ class AutomationFarm
                           HarvestLate: "Farming-HarvestLate",
                           OakItemLoadoutUpdate: "Farming-OakItemLoadoutUpdate",
                           SelectedBerryToPlant: "Farming-SelectedBerryToPlant",
+                           TargetBerry: "Farming-TargetBerry",
                           UseRichMulch: "Farming-UseRichMulch",
                           UseShovel: "Farming-UseShovel"
                       };
@@ -35,12 +36,13 @@ class AutomationFarm
             Automation.Utils.LocalStorage.setDefaultValue(this.Settings.UseShovel, false);
             Automation.Utils.LocalStorage.setDefaultValue(this.Settings.SelectedBerryToPlant, BerryType.Cheri);
 
+            Automation.Utils.LocalStorage.setDefaultValue(this.Settings.TargetBerry, -1);
             this.__internal__buildMenu();
         }
         else if (initStep == Automation.InitSteps.Finalize)
         {
             this.__internal__buildUnlockStrategySelection();
-            this.__internal__chooseUnlockStrategy();
+            this.__internal__buildTargetDropdown();
 
             // Restore previous session state
             this.toggleAutoFarming();
@@ -112,6 +114,9 @@ class AutomationFarm
     static __internal__farmInGameModal = null;
 
     static __internal__lockedBerries = [];
+    static __internal__targetParent = null;
+    static __internal__targetStatus = null;
+    static __internal__manualPlant = null;
 
     static __internal__farmingLoop = null;
 
@@ -252,6 +257,7 @@ class AutomationFarm
 
         // Selected berry drop-down list
         this.__internal__buildBerryDropdownList(farmingSettingPanel);
+        this.__internal__targetParent = farmingSettingPanel;
 
         this.__internal__buildFloatingModal();
     }
@@ -351,6 +357,139 @@ class AutomationFarm
         }
     }
 
+    // Manual target is independent of the automatic unlock toggle.
+    static __internal__buildTargetDropdown()
+    {
+        const label = document.createElement("label");
+        label.textContent = "Target berry (farm / mutate)";
+        label.style.display = "block";
+        const select = document.createElement("select");
+        select.className = "form-control form-control-sm";
+        const add = (id, name) => {
+            const option = document.createElement("option");
+            option.value = id;
+            option.textContent = name;
+            select.appendChild(option);
+        };
+        add(-1, "Automatic / normal farming");
+        const ids = [...new Set([...FarmController.berryListFiltered(),
+            ...this.__internal__unlockStrategySelection.filter(x => x.mutationPattern).map(x => x.berryToUnlock)])];
+        ids.filter(id => id !== BerryType.None && typeof BerryType[id] === "string")
+            .sort((a,b) => BerryType[a].localeCompare(BerryType[b]))
+            .forEach(id => add(id, BerryType[id]));
+        select.value = Automation.Utils.LocalStorage.getValue(this.Settings.TargetBerry);
+        if (select.selectedIndex < 0) select.value = "-1";
+        select.addEventListener("change", () => {
+            Automation.Utils.LocalStorage.setValue(this.Settings.TargetBerry, select.value);
+            this.__internal__currentStrategy = null;
+            Automation.Utils.OakItem.ForbiddenItems = [];
+            this.__internal__lastFarmingBerryType = null;
+            this.__internal__floatingPanelStateData = null;
+            if (this.__internal__farmingLoop !== null) this.__internal__farmLoop();
+        });
+        label.appendChild(select);
+        this.__internal__targetParent.appendChild(label);
+    }
+
+    static __internal__getTargetBerry()
+    {
+        const id = Number(Automation.Utils.LocalStorage.getValue(this.Settings.TargetBerry) ?? -1);
+        return id >= 0 && typeof BerryType[id] === "string" ? id : -1;
+    }
+
+    // Resolve missing parent berries recursively using the existing mutation recipes.
+    static __internal__resolveTarget(berry, amount = 1, seen = new Set())
+    {
+        const name = BerryType[berry];
+        const farm = App.game.farming;
+        if (seen.has(berry)) return { status: `Circular prerequisite: ${name}` };
+        seen = new Set(seen).add(berry);
+        const stock = farm.berryInventory[berry]?.() ?? 0;
+        const unlocked = farm.unlockedBerries[berry]?.();
+        const recipes = this.__internal__unlockStrategySelection.filter(x => x.berryToUnlock === berry);
+        const recipe = recipes.find(x => x.mutationPattern);
+        const boost = recipes.find(x => x.harvestBoost);
+        if (unlocked && stock > 0)
+        {
+            if (boost && boost.isNeeded() && BerryList[berry].harvestAmount <= 1 && berry !== BerryType.Passho)
+            {
+                const needed = farm.plotList.filter(p => p.isUnlocked && !p.isSafeLocked).length;
+                if (needed >= 9 && (farm.berryInventory[BerryType.Passho]?.() ?? 0) > 0)
+                    return { strategy: boost };
+            }
+            if (stock >= amount || BerryList[berry].harvestAmount > 1) return { plant: berry };
+        }
+        if (farm.plotList.some(p => p.berry === berry && !p.isEmpty() && !p.isSafeLocked) && stock === 0)
+            return { status: `Waiting to harvest ${name}.` };
+        if (!recipe) return { status: `Obtain ${name} manually first (no mutation recipe).` };
+        if (recipe.requiresDiscord && (App.game.discord.ID() === null ||
+            !farm.mutations.find(m => m.mutatedBerry === berry)?.hintsSeen?.every(h => h())))
+            return { status: `${name} requires Discord linking and all four hints.` };
+        if (recipe.requiredPokemon && !App.game.statistics.pokemonCaptured[PokemonHelper.getPokemonByName(recipe.requiredPokemon).id]())
+            return { status: `Catch ${recipe.requiredPokemon} to mutate ${name}.` };
+        if (recipe.oakItemToEquip !== null)
+        {
+            const item = App.game.oakItems.itemList[recipe.oakItemToEquip];
+            if (!item?.isUnlocked() || (!item.isActive && Automation.Utils.LocalStorage.getValue(this.Settings.OakItemLoadoutUpdate) !== "true"))
+                return { status: `Equip/unlock the required Oak item for ${name}.` };
+        }
+        if (Automation.Utils.LocalStorage.getValue(this.Settings.OakItemLoadoutUpdate) !== "true" &&
+            recipe.forbiddenOakItems.some(id => App.game.oakItems.itemList[id]?.isActive))
+            return { status: `Remove incompatible Oak items for ${name}.` };
+        for (const [id, indexes] of Object.entries(recipe.mutationPattern))
+        {
+            const parent = Number(id);
+            const available = indexes.filter(i => farm.plotList[i]?.isUnlocked && !farm.plotList[i].isSafeLocked);
+            if (available.length !== indexes.length) return { status: `Unlock or unprotect required plots for ${name}.` };
+            const planted = available.filter(i => farm.plotList[i].berry === parent).length;
+            if ((farm.berryInventory[parent]?.() ?? 0) + planted < indexes.length)
+                return this.__internal__resolveTarget(parent, indexes.length - planted, seen);
+        }
+        if (!farm.mutations.some(m => m.mutatedBerry === berry && m.unlocked))
+            return { status: `Mutation requirements for ${name} are not met.` };
+        if (berry === BerryType.Chilan && farm.plotList.some(p => !p.isEmpty() && p.berry !== BerryType.Chople))
+            return { status: `Waiting for the field to clear before mutating ${name}.` };
+        return { strategy: recipe };
+    }
+
+    static __internal__runTargetBerry(target)
+    {
+        const result = this.__internal__resolveTarget(target);
+        const previous = this.__internal__currentStrategy;
+        this.__internal__currentStrategy = result.strategy ?? null;
+        if (previous !== this.__internal__currentStrategy) this.__internal__floatingPanelStateData = null;
+        this.__internal__manualPlant = result.plant ?? null;
+        this.__internal__targetStatus = result.status ?? null;
+        Automation.Utils.OakItem.ForbiddenItems = [];
+        // Choose the strategy BEFORE harvesting to preserve mutation parents.
+        this.__internal__harvestAsEfficientAsPossible();
+        if (result.strategy)
+        {
+            this.__internal__removeOakItemIfNeeded();
+            this.__internal__equipOakItemIfNeeded();
+            result.strategy.action();
+        }
+        else if (result.plant !== undefined)
+        {
+            if (Automation.Utils.LocalStorage.getValue(this.Settings.UseShovel) === "true")
+                for (const index of App.game.farming.plotList.keys())
+                    this.__internal__removeAnyUnwantedBerry(index, result.plant, true);
+            this.__internal__plantAllBerries(result.plant);
+        }
+        const panel = this.__internal__contentFloatingContentContainer;
+        if (!result.strategy || !panel.querySelector(".manualBerryTarget"))
+        {
+            if (!result.strategy) panel.textContent = result.status ?? `Farming ${BerryType[result.plant]} berries`;
+            const heading = document.createElement("div");
+            heading.className = "manualBerryTarget";
+            heading.style.fontWeight = "bold";
+            heading.textContent = `Target: ${BerryType[target]}`;
+            panel.prepend(heading);
+        }
+        else panel.querySelector(".manualBerryTarget").textContent = `Target: ${BerryType[target]}`;
+        this.__internal__lastFarmingBerryType = null;
+    }
+
     /**
      * @brief Builds the floating panel that will be displayed next to the in-game farming modal
      */
@@ -396,6 +535,14 @@ class AutomationFarm
     {
         this.__internal__catchWanderingPokemons();
 
+        const target = this.__internal__getTargetBerry();
+        if (target >= 0 && this.ForcePlantBerriesAsked == null)
+        {
+            this.__internal__runTargetBerry(target);
+            return;
+        }
+        this.__internal__manualPlant = null;
+        this.__internal__targetStatus = null;
         this.__internal__harvestAsEfficientAsPossible();
         this.__internal__tryToUnlockNewSpots();
 
@@ -584,7 +731,7 @@ class AutomationFarm
         this.__internal__freeSlotCount = 0;
         this.__internal__plantedBerryCount = 0;
 
-        const focusOnUnlocksEnabled = Automation.Utils.LocalStorage.getValue(this.Settings.FocusOnUnlocks) === "true";
+        const focusOnUnlocksEnabled = this.__internal__currentStrategy !== null || (this.__internal__getTargetBerry() < 0 && Automation.Utils.LocalStorage.getValue(this.Settings.FocusOnUnlocks) === "true");
         const harvestLateEnabled = !focusOnUnlocksEnabled && (Automation.Utils.LocalStorage.getValue(this.Settings.HarvestLate) === "true");
         const richMulchEnabled = Automation.Utils.LocalStorage.getValue(this.Settings.UseRichMulch) === "true";
         const overallGrowthMultiplier = App.game.farming.getGrowthMultiplier();
@@ -613,7 +760,7 @@ class AutomationFarm
                 continue;
             }
 
-            const isCurrentBerryTheTarget = (this.__internal__currentStrategy?.berryToUnlock == plot.berry);
+            const isCurrentBerryTheTarget = (this.__internal__currentStrategy?.berryToUnlock == plot.berry) && !(this.__internal__getTargetBerry() >= 0 && this.__internal__currentStrategy?.harvestBoost);
 
             // Always harvest if it was asked, or the current plot berry is the target one
             if ((this.ForcePlantBerriesAsked == null) && !isCurrentBerryTheTarget)
@@ -1698,6 +1845,7 @@ class AutomationFarm
                         return this.__internal__doesPlayerNeedMoreBerry(berryType, minimumRequiredBerry);
                     }.bind(this),
                 berryToUnlock: berryType,
+                mutationPattern: berriesIndexes,
                 harvestStrategy: this.__internal__harvestTimingType.RightBeforeWithering,
                 oakItemToEquip: oakItemNeeded,
                 forbiddenOakItems: oakItemsToRemove,
@@ -1816,6 +1964,7 @@ class AutomationFarm
                         return this.__internal__doesPlayerNeedMoreBerry(berryType, minimumRequiredBerry);
                     }.bind(this),
                 berryToUnlock: berryType,
+                harvestBoost: true,
                 harvestStrategy: this.__internal__harvestTimingType.RightBeforeWithering, // Harvest will be handled manually
                 oakItemToEquip: null,
                 forbiddenOakItems: [],
