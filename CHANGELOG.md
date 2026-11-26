@@ -6,6 +6,16 @@ This file records custom changes to this fork of [Farigh/pokeclicker-automation]
 
 Entries are in reverse commit order. Dates identify the development session, not necessarily the Git commit's timezone.
 
+### Quick Poké Ball filter switches
+
+**Added** · [Module](https://github.com/FredTinkle1/PokeclickerScripts/commit/fcc9402baa67372e769dfd10c182c5c37bd20722) · [Loader](https://github.com/FredTinkle1/PokeclickerScripts/commit/049e3a94840312d0d439cef42ab5192cf4b81f10) · [Integration](https://github.com/FredTinkle1/PokeclickerScripts/commit/5c35722918ae082a04493897564cb7c4cd165a03)
+
+- Adds a compact On column to the native Poké Balls panel. Switches use the original filter enabled observable and native save behavior.
+- Automatically updates when filters are created, renamed, reordered, deleted or toggled in the configuration dialog. Existing ball selection, rule conditions and priority remain unchanged.
+- The Automation filter displays its current state but its quick switch is read-only to avoid conflicting with automation.
+- Adjusts table column proportions rather than widening the entire game sidebar.
+- Verified native table and enabled/save API against PokéClicker v0.10.26 source. Live testing pending.
+
 ### Go To label cleanup
 
 **Fixed** · [Navigation](https://github.com/FredTinkle1/PokeclickerScripts/commit/45be6b4f3f448d2d13876890efb60a03df11cb34)
