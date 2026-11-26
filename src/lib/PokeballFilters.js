@@ -4,12 +4,11 @@
  */
 class AutomationPokeballFilters
 {
-    static observer = null;
-    static queued = false;
+    static timer = null;
 
     static initialize(step)
     {
-        if (step !== Automation.InitSteps.Finalize || this.observer) return;
+        if (step !== Automation.InitSteps.Finalize || this.timer !== null) return;
         const panel = document.getElementById("pokeballSelector");
         if (!panel || typeof ko === "undefined" || !App.game.pokeballFilters) return;
 
@@ -39,20 +38,24 @@ class AutomationPokeballFilters
             #pokeballSelector .tinkleFilterToggle:disabled { cursor: default; opacity: .65; }
         `;
         document.head.appendChild(style);
+        // Poll at a bounded rate rather than observing mutations caused by our
+        // own DOM updates. This prevents recursive microtask starvation.
         const refresh = () =>
         {
-            if (this.queued) return;
-            this.queued = true;
-            queueMicrotask(() =>
+            try
             {
-                this.queued = false;
-                this.refresh(panel);
-            });
+                const currentPanel = document.getElementById("pokeballSelector");
+                if (currentPanel) this.refresh(currentPanel);
+            }
+            catch (error)
+            {
+                clearInterval(this.timer);
+                this.timer = null;
+                console.error("[TINKLE AUTOMATION] Quick filter controls stopped:", error);
+            }
         };
-        this.observer = new MutationObserver(refresh);
-        this.observer.observe(panel, { childList: true, subtree: true, attributes: true,
-            attributeFilter: ["class", "data-name"] });
-        this.refresh(panel);
+        this.timer = setInterval(refresh, 500);
+        refresh();
     }
 
     static refresh(panel)
@@ -61,7 +64,7 @@ class AutomationPokeballFilters
         const table = body?.closest("table");
         const header = table?.tHead?.rows[0];
         if (!body || !header) return;
-        table.classList.add("tinkleFilterTable");
+        if (!table.classList.contains("tinkleFilterTable")) table.classList.add("tinkleFilterTable");
         if (!header.querySelector(".tinkleFilterToggleCell"))
         {
             const th = document.createElement("th");
@@ -89,7 +92,7 @@ class AutomationPokeballFilters
                     const current = ko.dataFor(row);
                     if (!current || current.name === "Automation" || typeof current.enabled !== "function") return;
                     current.enabled(!current.enabled());
-                    this.refresh(panel);
+                    button.setAttribute("aria-checked", String(!!current.enabled()));
                 });
                 button.addEventListener("contextmenu", event =>
                 {
@@ -100,10 +103,13 @@ class AutomationPokeballFilters
             }
             const button = cell.firstElementChild;
             const managed = filter.name === "Automation";
-            button.disabled = managed;
-            button.setAttribute("aria-checked", String(!!filter.enabled()));
-            button.setAttribute("aria-label", "Enable filter " + filter.name);
-            button.title = managed ? "Managed by automation" : (filter.enabled() ? "Disable " : "Enable ") + filter.name;
+            const state = String(!!filter.enabled());
+            const label = "Enable filter " + filter.name;
+            const title = managed ? "Managed by automation" : (filter.enabled() ? "Disable " : "Enable ") + filter.name;
+            if (button.disabled !== managed) button.disabled = managed;
+            if (button.getAttribute("aria-checked") !== state) button.setAttribute("aria-checked", state);
+            if (button.getAttribute("aria-label") !== label) button.setAttribute("aria-label", label);
+            if (button.title !== title) button.title = title;
         }
     }
 }
