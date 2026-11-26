@@ -6,6 +6,22 @@ This file records custom changes to this fork of [Farigh/pokeclicker-automation]
 
 Entries are in reverse commit order. Dates identify the development session, not necessarily the Git commit's timezone.
 
+### Boost Mulch for farming
+
+**Added** · [Farm](https://github.com/FredTinkle1/PokeclickerScripts/commit/f46b6ba326f6efade221dce359cd07defb9b0e11)
+
+- Optional persistent, off-by-default Boost Mulch setting for ordinary and manual-target berry production.
+- Uses current Sprayduck, plot aura, Boost Mulch growth and Sprinklotad duration multipliers; applies whole units from inventory with five seconds of estimated unboosted growth reserved before ripening.
+- Skips already-mulched, protected, empty and ripe plots; skips mutation and special planting patterns to avoid disrupting timing.
+- Does not remove mulch or spend mulch shovels. Changing growth auras or Oak Item bonuses after application may alter actual expiration timing.
+- Native API checked against v0.10.26 source; live testing pending.
+
+### Auto Purify tooltip
+
+**Changed** · [Purify](https://github.com/FredTinkle1/PokeclickerScripts/commit/4cf2c428deb07b7b9d1e17a3568b16f43b3d4b2f)
+
+- Removed the redundant "Independent of Auto Shop." description; behavior unchanged.
+
 ### Standalone Auto Purify
 
 **Added** · [Module](https://github.com/FredTinkle1/PokeclickerScripts/commit/9618b6b21cbbcad3b814023de4469e8a6d20f665) · [Loader](https://github.com/FredTinkle1/PokeclickerScripts/commit/d3ee270c0fa2d90b62de5b4409fcaef3074c6210) · [Menu integration](https://github.com/FredTinkle1/PokeclickerScripts/commit/52fa2cf54b9769a28981eb193b15f038075ae1ce)
