@@ -6,6 +6,14 @@ This file records custom changes to this fork of [Farigh/pokeclicker-automation]
 
 Entries are in reverse commit order. Dates identify the development session, not necessarily the Git commit's timezone.
 
+### Poké Ball quick-toggle startup freeze
+
+**Fixed** · [Module](https://github.com/FredTinkle1/PokeclickerScripts/commit/3ccb6cd4b6005bd32803bb670807e530f4d0343d)
+
+- Removed the self-triggering DOM mutation observer and microtask loop; refreshes controls on a bounded 500ms timer instead.
+- Updates existing DOM attributes only when their values change, and stops the timer if an unexpected error occurs.
+- Preserves native filter states and quick switches. Live crash recovery verification pending.
+
 ### Quick Poké Ball filter switches
 
 **Added** · [Module](https://github.com/FredTinkle1/PokeclickerScripts/commit/fcc9402baa67372e769dfd10c182c5c37bd20722) · [Loader](https://github.com/FredTinkle1/PokeclickerScripts/commit/049e3a94840312d0d439cef42ab5192cf4b81f10) · [Integration](https://github.com/FredTinkle1/PokeclickerScripts/commit/5c35722918ae082a04493897564cb7c4cd165a03)
