@@ -38,24 +38,29 @@ class AutomationTimeWeather
             if (!Number.isInteger(this.hour) || this.hour < -1 || this.hour > 23) this.hour = -1;
             if (!this.weatherOptions.some(([value]) => value === this.weather)) this.weather = -1;
 
-            const container = document.createElement("div");
-            Automation.Menu.AutomationButtonsDiv.appendChild(container);
-            Automation.Menu.addSeparator(container);
-            const title = document.createElement("div");
+            const section = document.createElement("div");
+            Automation.Menu.AutomationButtonsDiv.appendChild(section);
+            Automation.Menu.addSeparator(section);
+            const container = document.createElement("details");
+            Object.assign(container.style, { margin: "3px 5px", textAlign: "center", lineHeight: "1.3" });
+            section.appendChild(container);
+            const title = document.createElement("summary");
             title.textContent = "Time & Weather";
-            title.style.textAlign = "center";
+            Object.assign(title.style, { cursor: "pointer", fontSize: "12px", padding: "4px 0" });
             container.appendChild(title);
 
             const addSelect = (label, options, value, change) =>
             {
                 const row = document.createElement("label");
                 Object.assign(row.style, { display: "flex", alignItems: "center", gap: "4px",
-                    margin: "2px 5px", fontSize: "12px" });
+                    margin: "3px 1px", fontSize: "11px" });
                 const caption = document.createElement("span");
                 caption.textContent = label;
+                caption.style.flex = "0 0 42px";
+                caption.style.textAlign = "left";
                 row.appendChild(caption);
                 const select = document.createElement("select");
-                Object.assign(select.style, { flex: "1", minWidth: "0", height: "22px", fontSize: "11px" });
+                Object.assign(select.style, { flex: "1", minWidth: "0", width: "0", height: "22px", fontSize: "11px", boxSizing: "border-box" });
                 for (const [id, name] of options)
                 {
                     const option = document.createElement("option");
@@ -64,7 +69,8 @@ class AutomationTimeWeather
                     select.appendChild(option);
                 }
                 select.value = String(value);
-                select.addEventListener("change", () => change(Number(select.value)));
+                select.title = select.selectedOptions[0]?.textContent ?? "";
+                select.addEventListener("change", () => { select.title = select.selectedOptions[0]?.textContent ?? ""; change(Number(select.value)); });
                 row.appendChild(select);
                 container.appendChild(row);
                 return select;
