@@ -6,6 +6,15 @@ This file records custom changes to this fork of [Farigh/pokeclicker-automation]
 
 Entries are in reverse commit order. Dates identify the development session, not necessarily the Git commit's timezone.
 
+### Dedicated farming Oak Item loadout
+
+**Added** · [Farm](https://github.com/FredTinkle1/PokeclickerScripts/commit/72821af4a3f3fa802142b77054ffa7a76eaca846) · [Oak Item utility](https://github.com/FredTinkle1/PokeclickerScripts/commit/1110d80fd5fbb61a803db45a9d55a79f0e6cf98e)
+
+- Persistent, optional, off-by-default farming loadout prioritizes Sprayduck, Sprinklotad and Squirtbottle while auto farming runs.
+- Shared loadout helper preserves farming priority during Focus loadout changes; unlocked slots and mutation requirements/forbidden items are respected. Spare slots may hold other Oak Items.
+- Avoids re-equipping unchanged loadouts. Boost Mulch applications continue using live game growth and mulch duration multipliers on each farming cycle, including level changes. Already-applied mulch cannot be resized without removing it.
+- Live game testing pending.
+
 ### Boost Mulch for farming
 
 **Added** · [Farm](https://github.com/FredTinkle1/PokeclickerScripts/commit/f46b6ba326f6efade221dce359cd07defb9b0e11)
