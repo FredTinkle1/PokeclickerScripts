@@ -723,9 +723,7 @@ class AutomationFocus
         wrapper.id = "automationShinyHuntingOverlay";
         wrapper.open = true;
         Object.assign(wrapper.style, {
-            position: "fixed",
-            left: "10px",
-            top: "60px",
+            position: "relative",
             width: "240px",
             maxWidth: "calc(100vw - 20px)",
             boxSizing: "border-box",
@@ -750,13 +748,13 @@ class AutomationFocus
         panel.id = "automationShinyHuntingPanel";
         Object.assign(panel.style, {
             padding: "8px 10px",
-            maxHeight: "calc(100vh - 115px)",
+            maxHeight: "max(80px, calc(100vh - 220px))",
             overflowY: "auto",
             boxSizing: "border-box",
             borderTop: "1px solid #777"
         });
         wrapper.appendChild(panel);
-        document.body.appendChild(wrapper);
+        (document.getElementById("automationLeftSidebar") || document.body).appendChild(wrapper);
         this.__internal__shinyPanel = panel;
         this.__internal__updateShinyPanelVisibility();
     }
