@@ -20,7 +20,6 @@ class Automation
     static Shop = AutomationShop;
     static Purify = AutomationPurify;
     static TimeWeather = AutomationTimeWeather;
-    static PokeballFilters = AutomationPokeballFilters;
     static Trivia = AutomationTrivia;
     static Underground = AutomationUnderground;
     static Utils = AutomationUtils;
@@ -75,7 +74,6 @@ class Automation
                     this.Shop.initialize(initStep);
                     this.Purify.initialize(initStep);
                     this.TimeWeather.initialize(initStep);
-                    this.PokeballFilters.initialize(initStep);
                     this.Items.initialize(initStep);
                     this.Notifications.initialize(initStep);
 
