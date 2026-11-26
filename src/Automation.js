@@ -20,6 +20,7 @@ class Automation
     static Shop = AutomationShop;
     static Purify = AutomationPurify;
     static TimeWeather = AutomationTimeWeather;
+    static PokeballFilters = AutomationPokeballFilters;
     static Trivia = AutomationTrivia;
     static Underground = AutomationUnderground;
     static Utils = AutomationUtils;
@@ -89,6 +90,10 @@ class Automation
                     // Floating panel
                     this.BattleCafe.initialize(initStep);
                 }
+
+                // Optional UI enhancement must never prevent core startup.
+                try { this.PokeballFilters.initialize(this.InitSteps.Finalize); }
+                catch (error) { console.error("[TINKLE AUTOMATION] Quick filters unavailable:", error); }
 
                 // Log automation startup completion
                 console.log(`[${GameConstants.formatDate(new Date())}] %cAutomation started`, "color:#2ecc71;font-weight:900;");
