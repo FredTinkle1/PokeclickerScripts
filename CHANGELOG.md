@@ -6,6 +6,17 @@ This file records custom changes to this fork of [Farigh/pokeclicker-automation]
 
 Entries are in reverse commit order. Dates identify the development session, not necessarily the Git commit's timezone.
 
+### Time & Weather controls
+
+**Added** · [Module](https://github.com/FredTinkle1/PokeclickerScripts/commit/50c23245f0b9d58e4ba55567a956d956157b5fef) · [Loader](https://github.com/FredTinkle1/PokeclickerScripts/commit/61857ec83955a8f6847b6bf45fdea694ab68e290) · [Menu](https://github.com/FredTinkle1/PokeclickerScripts/commit/e42573e6d03c6003eb072cddde18f6b06fb887e6)
+
+- Adds independent persistent hour (00–23) and weather dropdowns below Auto Purify, with real-time/default options and a reset button.
+- Weather choices come from the game enum; a forced weather applies across all regions.
+- Hooks the game's clock tick and weather generation without altering the system clock or global Date constructor.
+- Defaults leave native game behavior unchanged. Compatibility guards skip the feature if required APIs are missing.
+- Approach references the GPL-3.0 Simple Time Changer and Simple Weather Changer scripts in [YggdrasziI/Pokeclicker-Scripts](https://github.com/YggdrasziI/Pokeclicker-Scripts), with original credits retained.
+- API approach checked against existing scripts; direct verification against the exact v0.10.26 game source and live testing remain pending.
+
 ### Dedicated farming Oak Item loadout
 
 **Added** · [Farm](https://github.com/FredTinkle1/PokeclickerScripts/commit/72821af4a3f3fa802142b77054ffa7a76eaca846) · [Oak Item utility](https://github.com/FredTinkle1/PokeclickerScripts/commit/1110d80fd5fbb61a803db45a9d55a79f0e6cf98e)
