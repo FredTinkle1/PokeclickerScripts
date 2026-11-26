@@ -54,12 +54,16 @@ class AutomationUtilsOakItem
      */
     static equipLoadout(loadoutCandidates)
     {
+        const farm = typeof Automation !== "undefined" ? Automation.Farm : null;
+        const dedicated = farm?.dedicatedLoadoutCandidates?.() ?? [];
+        loadoutCandidates = [...new Set([...dedicated, ...loadoutCandidates])];
+        const strategyForbidden = dedicated.length ? (farm.dedicatedLoadoutForbiddenItems?.() ?? []) : [];
         let possibleEquippedItem = 0;
         let expectedLoadout = loadoutCandidates.filter(
             (item) =>
             {
                 // Skip any forbidden item
-                if (this.ForbiddenItems.includes(item))
+                if (this.ForbiddenItems.includes(item) || strategyForbidden.includes(item))
                 {
                     return false;
                 }
@@ -71,7 +75,7 @@ class AutomationUtilsOakItem
                     return false;
                 }
 
-                if (App.game.oakItems.itemList[item].isUnlocked())
+                if (App.game.oakItems.itemList[item]?.isUnlocked())
                 {
                     if (possibleEquippedItem < App.game.oakItems.maxActiveCount())
                     {
@@ -82,6 +86,8 @@ class AutomationUtilsOakItem
                 return false;
             }, this);
 
+        const active = App.game.oakItems.itemList.filter(item => item.isActive).map(item => item.name);
+        if (active.length === expectedLoadout.length && expectedLoadout.every(item => active.includes(item))) return;
         App.game.oakItems.deactivateAll();
         for (const item of expectedLoadout)
         {
