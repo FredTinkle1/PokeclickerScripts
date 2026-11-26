@@ -17,7 +17,7 @@ class AutomationPurify
             Automation.Menu.addSeparator(this.__container);
             const button = Automation.Menu.addAutomationButton(
                 "Auto Purify", this.Settings.FeatureEnabled,
-                "Automatically selects Shadow Pokémon and purifies them when the required flow is reached. Independent of Auto Shop.",
+                "Automatically selects Shadow Pokémon and purifies them when the required flow is reached.",
                 this.__container);
             button.addEventListener("click", () => this.__tick());
             this.__container.hidden = !this.__isUnlocked();
