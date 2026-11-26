@@ -6,6 +6,16 @@ This file records custom changes to this fork of [Farigh/pokeclicker-automation]
 
 Entries are in reverse commit order. Dates identify the development session, not necessarily the Git commit's timezone.
 
+### Searchable regional Go To
+
+**Changed / Added** · [Navigation](https://github.com/FredTinkle1/PokeclickerScripts/commit/0783d5a5f8e5ec9436040245793863956e271e13)
+
+- Uses uppercase region headers and location-only option labels instead of repeating the region on every row.
+- Adds case-insensitive, accent-insensitive live search by location, region or destination type; all search words must match.
+- Automatically selects the first accessible match when the previous selection is filtered out. Arrow Down focuses the dropdown; Escape clears search.
+- Preserves the left-side layout, unlocked-only list and travel restrictions. No navigation occurs until Go is pressed.
+- Live game testing pending.
+
 ### Sidebar formatting and cross-region Go To
 
 **Fixed / Added** · [Menu](https://github.com/FredTinkle1/PokeclickerScripts/commit/fc2e2f60a040c92a7a009e315d6e8e69de5bad97) · [Shiny overlay](https://github.com/FredTinkle1/PokeclickerScripts/commit/b6b9f83b6a4e85369bbe9e9cdcaac301f52a073c) · [Navigation](https://github.com/FredTinkle1/PokeclickerScripts/commit/636ab50321ad7a72d903ecbbd5e5fda16422302d) · [Time & Weather](https://github.com/FredTinkle1/PokeclickerScripts/commit/4f225c91b218f7b7bf4fd5dabf93087b8436681a)
