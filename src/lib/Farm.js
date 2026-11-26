@@ -14,6 +14,7 @@ class AutomationFarm
                           OakItemLoadoutUpdate: "Farming-OakItemLoadoutUpdate",
                           SelectedBerryToPlant: "Farming-SelectedBerryToPlant",
                            TargetBerry: "Farming-TargetBerry",
+                          UseBoostMulch: "Farming-UseBoostMulch",
                           UseRichMulch: "Farming-UseRichMulch",
                           UseShovel: "Farming-UseShovel"
                       };
@@ -32,6 +33,7 @@ class AutomationFarm
         {
             Automation.Utils.LocalStorage.setDefaultValue(this.Settings.AutoCatchWanderers, true);
             Automation.Utils.LocalStorage.setDefaultValue(this.Settings.HarvestLate, false);
+            Automation.Utils.LocalStorage.setDefaultValue(this.Settings.UseBoostMulch, false);
             Automation.Utils.LocalStorage.setDefaultValue(this.Settings.UseRichMulch, false);
             Automation.Utils.LocalStorage.setDefaultValue(this.Settings.UseShovel, false);
             Automation.Utils.LocalStorage.setDefaultValue(this.Settings.SelectedBerryToPlant, BerryType.Cheri);
@@ -212,6 +214,16 @@ class AutomationFarm
                                                                this.Settings.HarvestLate,
                                                                gatherAsLateAsPossibleTooltip,
                                                                farmingSettingPanel);
+
+        // Apply whole units of Boost Mulch only when they fit before ripening.
+        Automation.Menu.addLabeledAdvancedSettingsToggleButton(
+            "Apply boost mulch while growing",
+            this.Settings.UseBoostMulch,
+            "Speeds up ordinary berry farming using available Boost Mulch.\n"
+                + "Sizes applications using current growth and mulch duration bonuses.\n"
+                + "Leaves time for Boost Mulch to expire before ripening so Rich Mulch can be used.\n"
+                + "Skipped during mutation and special harvest-pattern strategies.",
+            farmingSettingPanel);
 
         // Use rich mulch before harvesting button
         const richMulchBeforeHarvestTooltip = "Enabling this setting will apply rich mulch to the plot right before harvesting."
@@ -475,6 +487,7 @@ class AutomationFarm
                 for (const index of App.game.farming.plotList.keys())
                     this.__internal__removeAnyUnwantedBerry(index, result.plant, true);
             this.__internal__plantAllBerries(result.plant);
+            this.__internal__applyBoostMulch(result.plant);
         }
         const panel = this.__internal__contentFloatingContentContainer;
         if (!result.strategy || !panel.querySelector(".manualBerryTarget"))
@@ -585,6 +598,7 @@ class AutomationFarm
         }
 
         this.__internal__plantAllBerries(berryToPlant);
+        this.__internal__applyBoostMulch(berryToPlant);
 
         if (this.__internal__currentStrategy !== null)
         {
@@ -787,6 +801,59 @@ class AutomationFarm
 
             this.__internal__harvestCount++;
             this.__internal__freeSlotCount++;
+        }
+    }
+
+    /**
+     * Uses whole mulch units with a safety margin before the berry becomes ripe.
+     * Growth time is measured in berry-age seconds; mulch duration in real seconds.
+     */
+    static __internal__applyBoostMulch(berryType)
+    {
+        if (Automation.Utils.LocalStorage.getValue(this.Settings.UseBoostMulch) !== "true")
+        {
+            return;
+        }
+        const farm = App.game.farming;
+        const mulch = MulchType.Boost_Mulch;
+        const duration = GameConstants.MULCH_USE_TIME * farm.getMulchDurationMultiplier();
+        const boost = GameConstants.BOOST_MULCH_MULTIPLIER;
+        const globalGrowth = farm.getGrowthMultiplier();
+        const safetySeconds = 5;
+        if (![duration, boost, globalGrowth].every(v => Number.isFinite(v) && v > 0))
+        {
+            return;
+        }
+
+        for (const [index, plot] of farm.plotList.entries())
+        {
+            const stock = farm.mulchList[mulch]();
+            if (stock < 1) break;
+            // Never overwrite or extend an existing mulch, touch protected plots,
+            // or accelerate a ripe berry's decay.
+            if (!plot.isUnlocked || plot.isSafeLocked || plot.isEmpty()
+                || plot.berry !== berryType || plot.mulch !== MulchType.None
+                || plot.stage() >= PlotStage.Berry)
+            {
+                continue;
+            }
+
+            const remainingAge = plot.berryData.growthTime[PlotStage.Bloom] - plot.age;
+            const normalRate = globalGrowth * plot.getGrowthMultiplier();
+            const boostedRate = normalRate * boost;
+            if (!Number.isFinite(boostedRate) || boostedRate <= 0 || remainingAge <= 0)
+            {
+                continue;
+            }
+
+            // A unit contributes duration * boostedRate berry-age seconds.
+            // Reserve five unboosted seconds after expiration and before ripening.
+            const availableAge = remainingAge - safetySeconds * normalRate;
+            const amount = Math.min(stock, Math.floor(availableAge / (duration * boostedRate)));
+            if (amount >= 1)
+            {
+                farm.addMulch(index, mulch, amount);
+            }
         }
     }
 
