@@ -12,6 +12,7 @@ class AutomationFarm
                           FocusOnUnlocks: "Farming-FocusOnUnlocks",
                           HarvestLate: "Farming-HarvestLate",
                           OakItemLoadoutUpdate: "Farming-OakItemLoadoutUpdate",
+                          DedicatedLoadout: "Farming-DedicatedLoadout",
                           SelectedBerryToPlant: "Farming-SelectedBerryToPlant",
                            TargetBerry: "Farming-TargetBerry",
                           UseBoostMulch: "Farming-UseBoostMulch",
@@ -33,6 +34,7 @@ class AutomationFarm
         {
             Automation.Utils.LocalStorage.setDefaultValue(this.Settings.AutoCatchWanderers, true);
             Automation.Utils.LocalStorage.setDefaultValue(this.Settings.HarvestLate, false);
+            Automation.Utils.LocalStorage.setDefaultValue(this.Settings.DedicatedLoadout, false);
             Automation.Utils.LocalStorage.setDefaultValue(this.Settings.UseBoostMulch, false);
             Automation.Utils.LocalStorage.setDefaultValue(this.Settings.UseRichMulch, false);
             Automation.Utils.LocalStorage.setDefaultValue(this.Settings.UseShovel, false);
@@ -206,6 +208,13 @@ class AutomationFarm
                                                                this.Settings.OakItemLoadoutUpdate,
                                                                disableOakItemTooltip,
                                                                farmingSettingPanel);
+
+        Automation.Menu.addLabeledAdvancedSettingsToggleButton(
+            "Use dedicated farming loadout",
+            this.Settings.DedicatedLoadout,
+            "Prioritizes Sprayduck, Sprinklotad and Squirtbottle while auto farming.\n"
+                + "Mutation requirements take priority. Other Oak Items may use spare slots.",
+            farmingSettingPanel);
 
         // Gather as late as possible button
         const gatherAsLateAsPossibleTooltip = "Enabling this setting will harvest the berries right before they die.\n"
@@ -479,6 +488,7 @@ class AutomationFarm
         {
             this.__internal__removeOakItemIfNeeded();
             this.__internal__equipOakItemIfNeeded();
+            this.__internal__applyDedicatedLoadout();
             result.strategy.action();
         }
         else if (result.plant !== undefined)
@@ -486,6 +496,7 @@ class AutomationFarm
             if (Automation.Utils.LocalStorage.getValue(this.Settings.UseShovel) === "true")
                 for (const index of App.game.farming.plotList.keys())
                     this.__internal__removeAnyUnwantedBerry(index, result.plant, true);
+            this.__internal__applyDedicatedLoadout();
             this.__internal__plantAllBerries(result.plant);
             this.__internal__applyBoostMulch(result.plant);
         }
@@ -569,6 +580,7 @@ class AutomationFarm
             {
                 this.__internal__removeOakItemIfNeeded();
                 this.__internal__equipOakItemIfNeeded();
+                this.__internal__applyDedicatedLoadout();
                 this.__internal__currentStrategy.action();
 
                 this.__internal__lastFarmingBerryType = null;
@@ -597,6 +609,9 @@ class AutomationFarm
             }
         }
 
+        this.__internal__currentStrategy = null;
+        Automation.Utils.OakItem.ForbiddenItems = [];
+        this.__internal__applyDedicatedLoadout();
         this.__internal__plantAllBerries(berryToPlant);
         this.__internal__applyBoostMulch(berryToPlant);
 
@@ -808,6 +823,41 @@ class AutomationFarm
      * Uses whole mulch units with a safety margin before the berry becomes ripe.
      * Growth time is measured in berry-age seconds; mulch duration in real seconds.
      */
+    static __internal__applyDedicatedLoadout()
+    {
+        if (!this.isDedicatedLoadoutActive()) return;
+        const strategy = this.__internal__currentStrategy;
+        const oak = App.game.oakItems;
+        const required = strategy?.oakItemToEquip;
+        const active = oak.itemList.filter(item => item.isActive).map(item => item.name);
+        Automation.Utils.OakItem.equipLoadout(
+            [...(required != null ? [required] : []), ...active]);
+    }
+
+    static isDedicatedLoadoutActive()
+    {
+        return this.__internal__farmingLoop !== null
+            && Automation.Utils.LocalStorage.getValue(this.Settings.DedicatedLoadout) === "true";
+    }
+
+    static dedicatedLoadoutForbiddenItems()
+    {
+        return this.__internal__currentStrategy?.forbiddenOakItems ?? [];
+    }
+
+    static dedicatedLoadoutCandidates()
+    {
+        if (!this.isDedicatedLoadoutActive()) return [];
+        const strategy = this.__internal__currentStrategy;
+        const required = strategy?.oakItemToEquip;
+        const canUpdate = Automation.Utils.LocalStorage.getValue(this.Settings.OakItemLoadoutUpdate) === "true";
+        const forbidden = strategy?.forbiddenOakItems ?? [];
+        return [...new Set([
+            ...(required != null && (canUpdate || App.game.oakItems.itemList[required]?.isActive) ? [required] : []),
+            OakItemType.Sprayduck, OakItemType.Sprinklotad, OakItemType.Squirtbottle
+        ])].filter(item => !forbidden.includes(item));
+    }
+
     static __internal__applyBoostMulch(berryType)
     {
         if (Automation.Utils.LocalStorage.getValue(this.Settings.UseBoostMulch) !== "true")
