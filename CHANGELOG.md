@@ -6,6 +6,12 @@ This file records custom changes to this fork of [Farigh/pokeclicker-automation]
 
 Entries are in reverse commit order. Dates identify the development session, not necessarily the Git commit's timezone.
 
+### Go To label cleanup
+
+**Fixed** · [Navigation](https://github.com/FredTinkle1/PokeclickerScripts/commit/45be6b4f3f448d2d13876890efb60a03df11cb34)
+
+- Removes redundant region prefixes and separators from displayed location names, including hyphens, dashes and colons. Region headers, search and original travel identifiers remain intact.
+
 ### Searchable regional Go To
 
 **Changed / Added** · [Navigation](https://github.com/FredTinkle1/PokeclickerScripts/commit/0783d5a5f8e5ec9436040245793863956e271e13)
