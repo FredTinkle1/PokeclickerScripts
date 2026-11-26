@@ -32,6 +32,11 @@ class AutomationMenu
         this.__internal__automationContainer.classList.add("automationMenuContainer");
         this.__internal__automationContainer.id = "automationContainer";
         document.body.appendChild(this.__internal__automationContainer);
+
+        const left = document.createElement("div");
+        left.id = "automationLeftSidebar";
+        Object.assign(left.style, { position: "fixed", top: "60px", left: "10px", width: "240px", maxWidth: "calc(100vw - 20px)", display: "flex", flexDirection: "column", gap: "6px", zIndex: "999" });
+        document.body.appendChild(left);
     }
 
     /**
@@ -1204,6 +1209,11 @@ class AutomationMenu
             {
                 max-height: 499px;
                 display: block;
+            }
+            /* The main sidebar must grow with added modules. Do not clip settings popouts. */
+            #automationButtonsDiv:not(.hide)
+            {
+                max-height: none;
             }
             .automationCategory.hide
             {
