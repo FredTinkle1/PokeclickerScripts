@@ -29,6 +29,8 @@ class AutomationTrivia
 
     static __internal__gotoSelectedLocation = null;
     static __internal__gotoSignature = null;
+    static __internal__gotoSearch = null;
+    static __internal__gotoStatus = null;
     static __internal__gotoDestinations = new Map();
     static __internal__moveToLocationButton = null;
     static __internal__moveToRoamersRouteButton = null;
@@ -176,6 +178,29 @@ class AutomationTrivia
         const row = document.createElement("div");
         Object.assign(row.style, { display: "flex", alignItems: "center", gap: "5px",
             padding: "6px 8px", borderTop: "1px solid #777" });
+        const search = document.createElement("input");
+        search.type = "search";
+        search.placeholder = "Search locations...";
+        search.setAttribute("aria-label", "Search unlocked destinations");
+        search.autocomplete = "off";
+        Object.assign(search.style, { display: "block", width: "calc(100% - 16px)",
+            boxSizing: "border-box", margin: "6px 8px 0", height: "25px", fontSize: "12px" });
+        panel.appendChild(search);
+        this.__internal__gotoSearch = search;
+        search.addEventListener("input", () => this.__internal__renderGotoOptions());
+        search.addEventListener("keydown", event =>
+        {
+            if (event.key === "ArrowDown")
+            {
+                event.preventDefault();
+                this.__internal__gotoSelectedLocation.focus();
+            }
+            else if (event.key === "Escape")
+            {
+                search.value = "";
+                this.__internal__renderGotoOptions();
+            }
+        });
         panel.appendChild(row);
         this.__internal__gotoSelectedLocation = Automation.Menu.createDropDownListElement("gotoSelectedLocation");
         Object.assign(this.__internal__gotoSelectedLocation.style, { flex: "1", minWidth: "0", width: "0", marginTop: "0", fontSize: "12px" });
@@ -186,6 +211,11 @@ class AutomationTrivia
         this.__internal__moveToLocationButton.classList.add("btn-primary");
         this.__internal__moveToLocationButton.onclick = this.__internal__moveToLocation.bind(this);
         row.appendChild(this.__internal__moveToLocationButton);
+        const status = document.createElement("div");
+        Object.assign(status.style, { padding: "0 8px 6px", fontSize: "11px", color: "#cccccc" });
+        status.setAttribute("aria-live", "polite");
+        panel.appendChild(status);
+        this.__internal__gotoStatus = status;
         parent.prepend(panel);
     }
 
@@ -212,7 +242,6 @@ class AutomationTrivia
     static __internal__refreshGotoLocationTrivia()
     {
         if (this.__internal__disableButtonIfNeeded(this.__internal__moveToLocationButton)) return;
-        const select = this.__internal__gotoSelectedLocation;
         const destinations = [];
         for (const [name, town] of Object.entries(TownList))
         {
@@ -231,40 +260,73 @@ class AutomationTrivia
         destinations.sort((a,b) => a.region - b.region || a.type.localeCompare(b.type)
             || (a.type === "Route" ? a.route.number - b.route.number : a.name.localeCompare(b.name)));
         const signature = JSON.stringify(destinations.map(d => [d.key,d.available]));
-        if (signature === this.__internal__gotoSignature)
+        if (signature !== this.__internal__gotoSignature)
         {
-            this.__internal__moveToLocationButton.disabled = !destinations.some(d => d.available);
-            return;
+            this.__internal__gotoSignature = signature;
+            this.__internal__gotoDestinations = new Map(destinations.map(d => [d.key,d]));
+            this.__internal__renderGotoOptions();
         }
-        this.__internal__gotoSignature = signature;
+        else
+        {
+            const destination = this.__internal__gotoDestinations.get(this.__internal__gotoSelectedLocation.value);
+            this.__internal__moveToLocationButton.disabled = !destination?.available;
+        }
+    }
+
+    static __internal__renderGotoOptions()
+    {
+        const select = this.__internal__gotoSelectedLocation;
         const previous = select.value;
-        this.__internal__gotoDestinations = new Map(destinations.map(d => [d.key,d]));
+        const normalize = value => String(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+        const words = normalize(this.__internal__gotoSearch.value.trim()).split(/\s+/).filter(Boolean);
+        const destinations = [...this.__internal__gotoDestinations.values()].map(destination =>
+        {
+            const region = GameConstants.camelCaseToString(GameConstants.Region[destination.region]);
+            const name = destination.name.toLowerCase().startsWith(region.toLowerCase() + " ")
+                ? destination.name.slice(region.length + 1) : destination.name;
+            return { ...destination, regionName: region, displayName: name };
+        }).filter(destination =>
+        {
+            const haystack = normalize(destination.regionName + " " + destination.displayName + " " + destination.type);
+            return words.every(word => haystack.includes(word));
+        });
         select.replaceChildren();
         let region = null, group;
         for (const destination of destinations)
         {
-            const regionName = GameConstants.camelCaseToString(GameConstants.Region[destination.region]);
             if (region !== destination.region)
             {
                 region = destination.region;
                 group = document.createElement("optgroup");
-                group.label = regionName;
+                group.label = destination.regionName.toUpperCase();
                 select.appendChild(group);
             }
             const option = document.createElement("option");
             option.value = destination.key;
-            const name = destination.name.toLowerCase().startsWith(regionName.toLowerCase() + " ")
-                ? destination.name.slice(regionName.length + 1) : destination.name;
-            option.textContent = regionName + " - " + name + (destination.type === "Dungeon" ? " (Dungeon)" : "");
+            option.textContent = destination.displayName + (destination.type === "Dungeon" ? " (Dungeon)" : "");
             option.disabled = !destination.available;
             group.appendChild(option);
         }
-        const old = this.__internal__gotoDestinations.get(previous);
+        const old = destinations.find(d => d.key === previous && d.available);
         const first = destinations.find(d => d.available);
-        if (old?.available) select.value = previous;
+        if (old) select.value = old.key;
         else if (first) select.value = first.key;
         else select.selectedIndex = -1;
-        this.__internal__moveToLocationButton.disabled = !first;
+        if (!destinations.length)
+        {
+            const option = document.createElement("option");
+            option.textContent = "No matching locations";
+            option.value = "";
+            option.disabled = true;
+            select.appendChild(option);
+            option.selected = true;
+        }
+        select.disabled = !first;
+        this.__internal__moveToLocationButton.disabled = !first || Automation.Utils.isInInstanceState();
+        this.__internal__gotoStatus.textContent = destinations.length
+            ? destinations.length + " matching location" + (destinations.length === 1 ? "" : "s")
+            : "No matching unlocked locations";
+        this.__internal__gotoStatus.hidden = !words.length && destinations.length > 0;
     }
 
     static __internal__moveToLocation()
