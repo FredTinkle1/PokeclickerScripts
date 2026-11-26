@@ -28,6 +28,8 @@ class AutomationTrivia
     \*********************************************************************/
 
     static __internal__gotoSelectedLocation = null;
+    static __internal__gotoSignature = null;
+    static __internal__gotoDestinations = new Map();
     static __internal__moveToLocationButton = null;
     static __internal__moveToRoamersRouteButton = null;
     static __internal__roamingRouteTriviaContainer = null;
@@ -69,7 +71,7 @@ class AutomationTrivia
 
         this.__internal__addAvailableBulletinBoardContent(triviaDiv);
 
-        this.__internal__addGotoLocationContent(triviaDiv);
+        this.__internal__addGotoLocationContent(document.getElementById("automationLeftSidebar") || triviaDiv);
     }
 
     /**
@@ -159,41 +161,32 @@ class AutomationTrivia
      *
      * @param {Element} triviaDiv: The div element to add the created elements to
      */
-    static __internal__addGotoLocationContent(triviaDiv)
+    static __internal__addGotoLocationContent(parent)
     {
-        // Add go to location div
-        const gotoLocationDiv = document.createElement("div");
-        gotoLocationDiv.id = "gotoLocationTrivia";
-        gotoLocationDiv.style.textAlign = "center";
-        triviaDiv.appendChild(gotoLocationDiv);
-
-        // Add button and label div
-        const gotoContainer = document.createElement("div");
-        gotoContainer.classList.add("hasAutomationTooltip");
-        gotoContainer.classList.add("gotoAutomationTooltip");
-        const tooltip = "Goes to the selected location"
-                      + Automation.Menu.TooltipSeparator
-                      + "🏫-prefixed locations are towns\n"
-                      + "⚔-prefixed locations are dungeons";
-        gotoContainer.setAttribute("automation-tooltip-text", tooltip);
-        gotoLocationDiv.appendChild(gotoContainer);
-
-        // Add go to location button
+        const panel = document.createElement("details");
+        panel.id = "gotoLocationTrivia";
+        panel.open = true;
+        Object.assign(panel.style, { width: "100%", boxSizing: "border-box", background: "#444444",
+            color: "#eeeeee", border: "1px solid #aaaaaa", borderRadius: "5px", fontSize: "12px",
+            lineHeight: "1.4", textAlign: "left" });
+        const title = document.createElement("summary");
+        title.textContent = "Go To";
+        Object.assign(title.style, { cursor: "pointer", padding: "6px 10px", fontWeight: "bold" });
+        panel.appendChild(title);
+        const row = document.createElement("div");
+        Object.assign(row.style, { display: "flex", alignItems: "center", gap: "5px",
+            padding: "6px 8px", borderTop: "1px solid #777" });
+        panel.appendChild(row);
+        this.__internal__gotoSelectedLocation = Automation.Menu.createDropDownListElement("gotoSelectedLocation");
+        Object.assign(this.__internal__gotoSelectedLocation.style, { flex: "1", minWidth: "0", width: "0", marginTop: "0", fontSize: "12px" });
+        this.__internal__gotoSelectedLocation.title = "Unlocked towns, dungeons and routes in every region";
+        row.appendChild(this.__internal__gotoSelectedLocation);
         this.__internal__moveToLocationButton = Automation.Menu.createButtonElement("moveToLocationButton");
         this.__internal__moveToLocationButton.textContent = "Go";
         this.__internal__moveToLocationButton.classList.add("btn-primary");
         this.__internal__moveToLocationButton.onclick = this.__internal__moveToLocation.bind(this);
-        gotoContainer.appendChild(this.__internal__moveToLocationButton);
-
-        // Add the text next to the button
-        const gotoText = document.createElement("span");
-        gotoText.textContent = " to:";
-        gotoContainer.appendChild(gotoText);
-
-        // Add go to location drop-down list
-        this.__internal__gotoSelectedLocation = Automation.Menu.createDropDownListElement("gotoSelectedLocation");
-        this.__internal__gotoSelectedLocation.style.paddingLeft = "2px";
-        gotoLocationDiv.appendChild(this.__internal__gotoSelectedLocation);
+        row.appendChild(this.__internal__moveToLocationButton);
+        parent.prepend(panel);
     }
 
     /**
@@ -218,87 +211,76 @@ class AutomationTrivia
      */
     static __internal__refreshGotoLocationTrivia()
     {
-        if (this.__internal__disableButtonIfNeeded(this.__internal__moveToLocationButton))
+        if (this.__internal__disableButtonIfNeeded(this.__internal__moveToLocationButton)) return;
+        const select = this.__internal__gotoSelectedLocation;
+        const destinations = [];
+        for (const [name, town] of Object.entries(TownList))
         {
+            if (town.region < 0 || town.region > player.highestRegion() || !town.isUnlocked()) continue;
+            destinations.push({ key: "town:" + name, name, region: town.region,
+                type: Automation.Utils.isInstanceOf(town, "DungeonTown") ? "Dungeon" : "Town",
+                town, available: Automation.Utils.Route.canMoveToTown(town) });
+        }
+        for (const route of Routes.regionRoutes)
+        {
+            if (route.region < 0 || route.region > player.highestRegion() || !route.isUnlocked()) continue;
+            destinations.push({ key: "route:" + route.region + ":" + route.number,
+                name: route.routeName || "Route " + route.number, region: route.region,
+                type: "Route", route, available: Automation.Utils.Route.canMoveToRoute(route.number, route.region, route) });
+        }
+        destinations.sort((a,b) => a.region - b.region || a.type.localeCompare(b.type)
+            || (a.type === "Route" ? a.route.number - b.route.number : a.name.localeCompare(b.name)));
+        const signature = JSON.stringify(destinations.map(d => [d.key,d.available]));
+        if (signature === this.__internal__gotoSignature)
+        {
+            this.__internal__moveToLocationButton.disabled = !destinations.some(d => d.available);
             return;
         }
-
-        const filteredList = Object.entries(TownList).filter(([_, town]) => (town.region === player.region));
-        const unlockedTownCount = filteredList.reduce((count, [_, town]) => count + (town.isUnlocked() ? 1 : 0), 0);
-
-        // Clear the list if the player changed region
-        if (this.__internal__previousRegion !== player.region)
+        this.__internal__gotoSignature = signature;
+        const previous = select.value;
+        this.__internal__gotoDestinations = new Map(destinations.map(d => [d.key,d]));
+        select.replaceChildren();
+        let region = null, group;
+        for (const destination of destinations)
         {
-            // Drop all elements and rebuild the list
-            this.__internal__gotoSelectedLocation.innerHTML = "";
-
-            // Sort the list alphabetically
-            filteredList.sort(([townNameA, townA], [townNameB, townB]) =>
-                              {
-                                  if (townNameA > townNameB)
-                                  {
-                                      return 1;
-                                  }
-                                  if (townNameA < townNameB)
-                                  {
-                                      return -1;
-                                  }
-
-                                  return 0;
-                              });
-
-            let selectedItemSet = false;
-            // Build the new drop-down list
-            for (const [townName, town] of filteredList)
+            const regionName = GameConstants.camelCaseToString(GameConstants.Region[destination.region]);
+            if (region !== destination.region)
             {
-                const type = Automation.Utils.isInstanceOf(town, "DungeonTown") ? "&nbsp;⚔&nbsp;" : "🏫";
-
-                const opt = document.createElement("option");
-                opt.value = townName;
-                opt.id = townName;
-                opt.innerHTML = type + ' ' + townName;
-
-                // Don't show the option if it's not been unlocked yet
-                if (!town.isUnlocked())
-                {
-                    opt.style.display = "none";
-                }
-                else if (!selectedItemSet)
-                {
-                    opt.selected = true;
-                    selectedItemSet = true;
-                }
-
-                this.__internal__gotoSelectedLocation.options.add(opt);
+                region = destination.region;
+                group = document.createElement("optgroup");
+                group.label = regionName;
+                select.appendChild(group);
             }
-
-            this.__internal__previousRegion = player.region;
-
-            this.__internal__currentLocationListSize = unlockedTownCount;
+            const option = document.createElement("option");
+            option.value = destination.key;
+            const name = destination.name.toLowerCase().startsWith(regionName.toLowerCase() + " ")
+                ? destination.name.slice(regionName.length + 1) : destination.name;
+            option.textContent = regionName + " - " + name + (destination.type === "Dungeon" ? " (Dungeon)" : "");
+            option.disabled = !destination.available;
+            group.appendChild(option);
         }
-        else if (this.__internal__currentLocationListSize != unlockedTownCount)
-        {
-            for (const [townName, town] of filteredList)
-            {
-                if (town.isUnlocked())
-                {
-                    const opt = this.__internal__gotoSelectedLocation.options.namedItem(townName);
-                    if (opt.style.display === "none")
-                    {
-                        opt.style.display = "block";
-                    }
-                }
-            }
-        }
+        const old = this.__internal__gotoDestinations.get(previous);
+        const first = destinations.find(d => d.available);
+        if (old?.available) select.value = previous;
+        else if (first) select.value = first.key;
+        else select.selectedIndex = -1;
+        this.__internal__moveToLocationButton.disabled = !first;
     }
 
-    /**
-     * @brief Moves the player to the selected 'Go to' location
-     */
     static __internal__moveToLocation()
     {
-        const selectedDestination = this.__internal__gotoSelectedLocation.value;
-        Automation.Utils.Route.moveToTown(selectedDestination);
+        const destination = this.__internal__gotoDestinations.get(this.__internal__gotoSelectedLocation.value);
+        if (!destination || Automation.Utils.isInInstanceState()) return;
+        const utils = Automation.Utils.Route;
+        if (destination.type === "Route")
+        {
+            const route = destination.route;
+            if (utils.canMoveToRoute(route.number, route.region, route)) utils.moveToRoute(route.number, route.region);
+        }
+        else if (utils.canMoveToTown(destination.town))
+        {
+            utils.moveToTown(destination.name);
+        }
     }
 
     /**
