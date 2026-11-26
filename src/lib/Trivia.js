@@ -282,8 +282,12 @@ class AutomationTrivia
         const destinations = [...this.__internal__gotoDestinations.values()].map(destination =>
         {
             const region = GameConstants.camelCaseToString(GameConstants.Region[destination.region]);
-            const name = destination.name.toLowerCase().startsWith(region.toLowerCase() + " ")
-                ? destination.name.slice(region.length + 1) : destination.name;
+            // Strip the region only from the displayed label, never from the destination key.
+            const rawName = String(destination.name).trim();
+            const prefix = rawName.slice(0, region.length);
+            const suffix = rawName.slice(region.length);
+            const name = prefix.toLowerCase() === region.toLowerCase() && /^[\s\-–—:]+/.test(suffix)
+                ? suffix.replace(/^[\s\-–—:]+/, "").trim() : rawName;
             return { ...destination, regionName: region, displayName: name };
         }).filter(destination =>
         {
