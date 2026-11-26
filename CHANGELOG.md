@@ -6,6 +6,14 @@ This file records custom changes to this fork of [Farigh/pokeclicker-automation]
 
 Entries are in reverse commit order. Dates identify the development session, not necessarily the Git commit's timezone.
 
+### Quick filter startup isolation
+
+**Temporarily disabled** · [Integration](https://github.com/FredTinkle1/PokeclickerScripts/commit/946af27a972835c666c9ac562deefd27792845f9) · [Loader](https://github.com/FredTinkle1/PokeclickerScripts/commit/0d734f037fb3483610e26fc3db0ca2a73eb95954)
+
+- Startup freezes persisted after the observer fix, and quick switches were not visible.
+- Removed the quick filter module from both startup and component loading for isolation. Its source remains in the repository for future debugging.
+- All earlier automation features and native Poké Ball filters are unchanged. Recovery is not yet confirmed in the browser.
+
 ### Poké Ball quick-toggle startup freeze
 
 **Fixed** · [Module](https://github.com/FredTinkle1/PokeclickerScripts/commit/3ccb6cd4b6005bd32803bb670807e530f4d0343d)
