@@ -6,6 +6,17 @@ This file records custom changes to this fork of [Farigh/pokeclicker-automation]
 
 Entries are in reverse commit order. Dates identify the development session, not necessarily the Git commit's timezone.
 
+### Sidebar formatting and cross-region Go To
+
+**Fixed / Added** · [Menu](https://github.com/FredTinkle1/PokeclickerScripts/commit/fc2e2f60a040c92a7a009e315d6e8e69de5bad97) · [Shiny overlay](https://github.com/FredTinkle1/PokeclickerScripts/commit/b6b9f83b6a4e85369bbe9e9cdcaac301f52a073c) · [Navigation](https://github.com/FredTinkle1/PokeclickerScripts/commit/636ab50321ad7a72d903ecbbd5e5fda16422302d) · [Time & Weather](https://github.com/FredTinkle1/PokeclickerScripts/commit/4f225c91b218f7b7bf4fd5dabf93087b8436681a)
+
+- Removed the main automation category's 499px height cap so other panels no longer overlap its contents; settings popouts remain unclipped.
+- Time & Weather now uses a compact collapsible section, with aligned dropdowns and full selected-value tooltips.
+- Moved Go To into a collapsible left-side panel above the shiny tracker. Both share a vertical layout.
+- Lists unlocked towns, dungeons and routes across all regions, grouped and labeled by region. Temporarily inaccessible destinations are disabled, and instance restrictions are respected.
+- Refreshes availability as progress changes; preserves selected destination where possible. Existing Focus automation may subsequently move the player again.
+- Live gameplay and layout testing pending.
+
 ### Time & Weather controls
 
 **Added** · [Module](https://github.com/FredTinkle1/PokeclickerScripts/commit/50c23245f0b9d58e4ba55567a956d956157b5fef) · [Loader](https://github.com/FredTinkle1/PokeclickerScripts/commit/61857ec83955a8f6847b6bf45fdea694ab68e290) · [Menu](https://github.com/FredTinkle1/PokeclickerScripts/commit/e42573e6d03c6003eb072cddde18f6b06fb887e6)
