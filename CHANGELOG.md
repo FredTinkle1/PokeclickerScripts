@@ -6,6 +6,14 @@ This file records custom changes to this fork of [Farigh/pokeclicker-automation]
 
 Entries are in reverse commit order. Dates identify the development session, not necessarily the Git commit's timezone.
 
+### Quick filter native binding rebuild
+
+**Changed** · [Module](https://github.com/FredTinkle1/PokeclickerScripts/commit/f5ce5ea2f7c1536f5483f087150653fd391348da) · [Loader](https://github.com/FredTinkle1/PokeclickerScripts/commit/6d5ec95a3cf83aa808cd6ed3f7f04acc5dfb4b9a) · [Integration](https://github.com/FredTinkle1/PokeclickerScripts/commit/10d223d64e3a2f1141817f80fef731cee65112dd)
+
+- User confirmed pre-feature commit 0af2284 runs normally. Rebuilt quick controls using native Knockout bindings and a list subscription with one-shot rendering; no DOM observer or repeating timer.
+- Optional controls initialize after core automation and stop their subscription on unexpected errors.
+- Live testing pending; known working fallback remains 0af22844c0f2d66b27d02ea2e5b941f2cc4170bf.
+
 ### Quick filter startup isolation
 
 **Temporarily disabled** · [Integration](https://github.com/FredTinkle1/PokeclickerScripts/commit/946af27a972835c666c9ac562deefd27792845f9) · [Loader](https://github.com/FredTinkle1/PokeclickerScripts/commit/0d734f037fb3483610e26fc3db0ca2a73eb95954)
