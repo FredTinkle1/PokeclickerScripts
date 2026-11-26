@@ -19,6 +19,7 @@ class Automation
     static Menu = AutomationMenu;
     static Shop = AutomationShop;
     static Purify = AutomationPurify;
+    static TimeWeather = AutomationTimeWeather;
     static Trivia = AutomationTrivia;
     static Underground = AutomationUnderground;
     static Utils = AutomationUtils;
@@ -72,6 +73,7 @@ class Automation
                     this.Farm.initialize(initStep);
                     this.Shop.initialize(initStep);
                     this.Purify.initialize(initStep);
+                    this.TimeWeather.initialize(initStep);
                     this.Items.initialize(initStep);
                     this.Notifications.initialize(initStep);
 
