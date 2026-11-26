@@ -6,6 +6,16 @@ This file records custom changes to this fork of [Farigh/pokeclicker-automation]
 
 Entries are in reverse commit order. Dates identify the development session, not necessarily the Git commit's timezone.
 
+### Automatic commit-pinned userscript loader
+
+**Added** · [Userscript](https://github.com/FredTinkle1/PokeclickerScripts/commit/65c777c52551926c808c4f18a60cf55d19c691ec)
+
+- Stores the full TINKLE AUTOMATION Tampermonkey bootstrap as `TinkleAutomation.user.js`.
+- Resolves the latest master commit through GitHub's API once per startup with cache bypass, validates the SHA, and uses the same immutable revision for all components.
+- Falls back to user-confirmed working commit 056afeb7 if the API lookup or initial loader download/syntax check fails. Supports a manual forced commit.
+- Uses request timeouts and duplicate injection protection. Runtime freezes or failures after injection do not automatically roll back; manual pinning remains available.
+- No changes to core automation or saved settings. Browser testing of the new bootstrap is pending.
+
 ### Quick filter native binding rebuild
 
 **Changed** · [Module](https://github.com/FredTinkle1/PokeclickerScripts/commit/f5ce5ea2f7c1536f5483f087150653fd391348da) · [Loader](https://github.com/FredTinkle1/PokeclickerScripts/commit/6d5ec95a3cf83aa808cd6ed3f7f04acc5dfb4b9a) · [Integration](https://github.com/FredTinkle1/PokeclickerScripts/commit/10d223d64e3a2f1141817f80fef731cee65112dd)
