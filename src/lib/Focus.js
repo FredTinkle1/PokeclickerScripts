@@ -497,6 +497,15 @@ class AutomationFocus
 
 
         
+        this.__internal__functionalities.push({
+            id: "Hatchery",
+            name: "Hatchery",
+            tooltip: "Maximizes estimated egg steps per second across accessible routes, gyms and Battle Frontier. Suppresses route catching while active.",
+            run: this.__internal__runHatcheryFocus.bind(this),
+            stop: this.__internal__stopHatcheryFocus.bind(this),
+            refreshRateAsMs: 2000
+        });
+
         this.Quests.__registerFunctionalities(this.__internal__functionalities);
         this.Achievements.__registerFunctionalities(this.__internal__functionalities);
         this.PokerusCure.__registerFunctionalities(this.__internal__functionalities);
@@ -669,6 +678,240 @@ class AutomationFocus
      *
      * @note If the user is in a state in which he cannot be moved, the feature is automatically disabled.
      */
+    // Hatchery focus owns only the battle controls and temporary route catch override.
+    static __hatcheryTarget = null;
+    static __hatcheryLastScan = 0;
+    static __hatcheryOwnGym = false;
+    static __hatcheryOwnFrontier = false;
+    static __hatcheryOriginalDefeat = null;
+    static __hatcheryDefeatWrapper = null;
+
+    static __internal__hatcherySuppressCatching()
+    {
+        if (this.__hatcheryDefeatWrapper) return;
+        const original = Battle.defeatPokemon;
+        const owner = this;
+        this.__hatcheryOriginalDefeat = original;
+        this.__hatcheryDefeatWrapper = function (...args)
+        {
+            if (this !== Battle || owner.__internal__activeFocus?.id !== "Hatchery"
+                || App.game.gameState !== GameConstants.GameState.fighting)
+                return original.apply(this, args);
+            const balls = App.game.pokeballs;
+            const select = balls.calculatePokeballToUse;
+            balls.calculatePokeballToUse = () => GameConstants.Pokeball.None;
+            try { return original.apply(this, args); }
+            finally { balls.calculatePokeballToUse = select; }
+        };
+        Battle.defeatPokemon = this.__hatcheryDefeatWrapper;
+    }
+
+    static __internal__stopHatcheryFocus()
+    {
+        if (Battle.defeatPokemon === this.__hatcheryDefeatWrapper)
+            Battle.defeatPokemon = this.__hatcheryOriginalDefeat;
+        this.__hatcheryDefeatWrapper = null;
+        this.__hatcheryOriginalDefeat = null;
+        if (this.__hatcheryOwnGym)
+            Automation.Menu.forceAutomationState(Automation.Gym.Settings.FeatureEnabled, false);
+        if (this.__hatcheryOwnFrontier && App.game.gameState === GameConstants.GameState.battleFrontier)
+        {
+            BattleFrontierRunner.end();
+            App.game.battleFrontier.leave();
+        }
+        this.__hatcheryOwnGym = false;
+        this.__hatcheryOwnFrontier = false;
+        this.__hatcheryTarget = null;
+        this.__hatcheryLastScan = 0;
+    }
+
+    static __internal__findHatcheryTarget()
+    {
+        const party = App.game.party;
+        const utils = Automation.Utils.Route;
+        const multiplier = App.game.breeding.multiplier.getBonus("eggStep");
+        const steps = (route, region) => Math.round(
+            Number(Math.sqrt(MapHelper.normalizeRoute(route, region)).toFixed(2)) * multiplier);
+        const clickMs = Math.max(50, Number(Automation.Utils.LocalStorage.getValue(Automation.Click.Settings.ClickInterval)) || 50);
+        const click = Automation.Utils.Battle.calculateClickAttack();
+        const clickKarp = Automation.Utils.Battle.calculateClickAttack(true);
+        const attackCache = new Map();
+        const attack = (types, region, subregion, frontier = false) =>
+        {
+            const t1 = types[0] ?? PokemonType.None, t2 = types[1] ?? PokemonType.None;
+            const key = [region, subregion, t1, t2, frontier].join(":");
+            if (!attackCache.has(key))
+                attackCache.set(key, party.calculatePokemonAttack(t1, t2, frontier,
+                    frontier ? GameConstants.Region.none : region, false, false,
+                    frontier ? WeatherType.Clear : Weather.regionalWeather[region](),
+                    false, true, subregion));
+            return attackCache.get(key);
+        };
+        // Battles reset the party attack counter on every new enemy.
+        const seconds = (hp, clickDamage, partyDamage, partyMs = 1000) =>
+        {
+            if (!(hp > 0)) return .05;
+            if (!(clickDamage > 0) && !(partyDamage > 0)) return Infinity;
+            const perMs = clickDamage / clickMs + partyDamage / partyMs;
+            if (!(perMs > 0)) return Infinity;
+            let lo = 0, hi = Math.ceil(hp / perMs) + Math.max(clickMs, partyMs);
+            while (lo < hi)
+            {
+                const mid = Math.floor((lo + hi) / 2);
+                if (Math.floor(mid / clickMs) * clickDamage + Math.floor(mid / partyMs) * partyDamage >= hp)
+                    hi = mid;
+                else lo = mid + 1;
+            }
+            return Math.max(.05, hi / 1000);
+        };
+        let best = null;
+        const consider = candidate =>
+        {
+            if (Number.isFinite(candidate.rate) && candidate.rate > 0
+                && (!best || candidate.rate > best.rate)) best = candidate;
+        };
+
+        for (const route of Routes.regionRoutes)
+        {
+            if (!utils.canMoveToRoute(route.number, route.region, route)) continue;
+            const names = [...new Set(RouteHelper.getAvailablePokemonList(route.number, route.region))];
+            if (!names.length) continue;
+            const clickDamage = utils.isInMagikarpJumpIsland(route.region, route.subRegion) ? clickKarp : click;
+            const hp = PokemonFactory.routeHealth(route.number, route.region);
+            const time = names.reduce((total, name) =>
+            {
+                const p = pokemonMap[name];
+                if (!p) return total + seconds(hp * 1.1, clickDamage, 0);
+                const health = hp * 1.1; // Conservative approximation of individual encounter HP.
+                const damage = clickDamage >= health ? 0 : attack(p.type, route.region, route.subRegion);
+                return total + seconds(health, clickDamage, damage);
+            }, 0) / names.length;
+            consider({ kind: "route", route, rate: steps(route.number, route.region) / time });
+        }
+
+        for (const [name, gym] of Object.entries(GymList))
+        {
+            const town = TownList[gym.town] ?? TownList[gym.parent?.name];
+            if (!town || !gym.isUnlocked() || !utils.canMoveToTown(town)
+                || Automation.Utils.isInstanceOf(town, "DungeonTown")) continue;
+            const team = gym.getPokemonList();
+            if (!team.length) continue;
+            const clickDamage = utils.isInMagikarpJumpIsland(town.region, town.subRegion) ? clickKarp : click;
+            const time = team.reduce((total, p) => total + seconds(p.maxHealth, clickDamage,
+                clickDamage >= p.maxHealth ? 0 : attack(pokemonMap[p.name]?.type ?? [], town.region, town.subRegion)), 0);
+            if (time >= GameConstants.GYM_TIME / 1000) continue;
+            consider({ kind: "gym", name, town: town.name,
+                rate: team.length * steps(gym.badgeReward * 3 + 1, GameConstants.Region.none) / (time + .15) });
+        }
+
+        // Frontier does not use the click automation. Estimate a sustainable full
+        // run from stage 1 (a loss resets the checkpoint), including timeout/restart.
+        const frontierTown = Object.values(TownList).find(town =>
+            utils.canMoveToTown(town) && town.content?.some(content =>
+                Automation.Utils.isInstanceOf(content, "BattleFrontierTownContent")
+                && (typeof content.isVisible !== "function" || content.isVisible())));
+        if (frontierTown && App.game.battleFrontier?.canAccess())
+        {
+            const damage = attack([PokemonType.None], frontierTown.region, frontierTown.subRegion, true);
+            const highest = App.game.statistics.battleFrontierHighestStageCompleted();
+            let totalSteps = 0, totalTime = 0;
+            for (let stage = 1; stage <= 2000; stage++)
+            {
+                const tick = stage <= highest ? GameConstants.BATTLE_FRONTIER_TICK : GameConstants.BATTLE_FRONTIER_TICK * 2;
+                const time = 3 * seconds(PokemonFactory.routeHealth(stage + 10, GameConstants.Region.none), 0, damage, tick);
+                if (time >= GameConstants.GYM_TIME / 1000)
+                {
+                    totalTime += GameConstants.GYM_TIME / 1000 + 2;
+                    break;
+                }
+                totalSteps += 3 * steps(stage, GameConstants.Region.none);
+                totalTime += time;
+            }
+            consider({ kind: "frontier", town: frontierTown.name, rate: totalSteps / totalTime });
+        }
+        return best;
+    }
+
+    static __internal__runHatcheryFocus()
+    {
+        try
+        {
+            if (!App.game.breeding.canAccess()) return;
+            const state = GameConstants.GameState;
+            const now = Date.now();
+            if (App.game.gameState === state.gym && this.__hatcheryOwnGym)
+            {
+                if (now - this.__hatcheryLastScan >= 60000)
+                    Automation.Menu.forceAutomationState(Automation.Gym.Settings.FeatureEnabled, false);
+                return;
+            }
+            if (App.game.gameState === state.battleFrontier && this.__hatcheryOwnFrontier)
+            {
+                if (BattleFrontierRunner.started()) return;
+                App.game.battleFrontier.leave();
+                this.__hatcheryOwnFrontier = false;
+                this.__hatcheryLastScan = 0;
+            }
+            if (!this.__ensureNoInstanceIsInProgress()) return;
+
+            this.__internal__hatcherySuppressCatching();
+            if (!App.game.challenges.list.disableClickAttack.active()
+                && Automation.Utils.LocalStorage.getValue(Automation.Click.Settings.FeatureEnabled) !== "true")
+                Automation.Menu.forceAutomationState(Automation.Click.Settings.FeatureEnabled, true);
+
+            if (!this.__hatcheryTarget || now - this.__hatcheryLastScan >= 60000)
+            {
+                this.__equipLoadout([OakItemType.Magma_Stone, OakItemType.Rocky_Helmet,
+                    OakItemType.Exp_Share, OakItemType.Amulet_Coin, OakItemType.Shiny_Charm]);
+                this.__hatcheryTarget = this.__internal__findHatcheryTarget();
+                this.__hatcheryLastScan = now;
+                if (!this.__hatcheryTarget) return;
+                console.log("[TINKLE AUTOMATION] Hatchery focus:", this.__hatcheryTarget);
+            }
+            const target = this.__hatcheryTarget;
+            if (target.kind === "route")
+            {
+                if (this.__hatcheryOwnGym)
+                    Automation.Menu.forceAutomationState(Automation.Gym.Settings.FeatureEnabled, false);
+                this.__hatcheryOwnGym = false;
+                Automation.Utils.Route.moveToRoute(target.route.number, target.route.region);
+            }
+            else if (target.kind === "gym")
+            {
+                if (!Automation.Utils.Route.isPlayerInTown(target.town))
+                {
+                    Automation.Menu.forceAutomationState(Automation.Gym.Settings.FeatureEnabled, false);
+                    Automation.Utils.Route.moveToTown(target.town);
+                    return;
+                }
+                const select = Automation.Gym.GymSelectElem;
+                if ([...select.options].some(option => option.value === target.name && option.style.display !== "none"))
+                {
+                    select.value = target.name;
+                    this.__hatcheryOwnGym = true;
+                    if (Automation.Utils.LocalStorage.getValue(Automation.Gym.Settings.FeatureEnabled) !== "true")
+                        Automation.Menu.forceAutomationState(Automation.Gym.Settings.FeatureEnabled, true);
+                }
+            }
+            else if (target.kind === "frontier")
+            {
+                if (this.__hatcheryOwnGym)
+                    Automation.Menu.forceAutomationState(Automation.Gym.Settings.FeatureEnabled, false);
+                this.__hatcheryOwnGym = false;
+                Automation.Utils.Route.moveToTown(target.town);
+                if (!Automation.Utils.Route.isPlayerInTown(target.town)) return;
+                App.game.battleFrontier.enter();
+                this.__hatcheryOwnFrontier = true;
+                BattleFrontierRunner.start(true);
+            }
+        }
+        catch (error)
+        {
+            console.error("[TINKLE AUTOMATION] Hatchery focus stopped:", error);
+            Automation.Menu.forceAutomationState(this.Settings.FeatureEnabled, false);
+        }
+    }
+
     static __internal__goToBestGymForMoney()
     {
         if (!this.__ensureNoInstanceIsInProgress())
