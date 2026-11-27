@@ -6,6 +6,15 @@ This file records custom changes to this fork of [Farigh/pokeclicker-automation]
 
 Entries are in reverse commit order. Dates identify the development session, not necessarily the Git commit's timezone.
 
+### Hatchery Focus
+
+**Added** · [Focus](https://github.com/FredTinkle1/PokeclickerScripts/commit/cc8314722377f6f29e9e7a92c1415b413e6d8d85)
+
+- Adds Hatchery to Focus; ranks accessible routes, gyms and Battle Frontier by estimated egg steps per second using native step formulas, current attack, weather, click interval and egg-step multiplier.
+- Recalculates roughly every minute and after Frontier runs; allows gym battles to finish before switching.
+- Temporarily suppresses route catches without changing saved filter rules; enables Auto attack when allowed and prioritizes Magma Stone when Focus loadout optimization is enabled.
+- Preserves existing hatchery selection settings. Frontier estimates use a bounded full-run simulation with neutral attack; route HP estimates are conservative, so rankings are approximate. Live testing pending.
+
 ### Automatic commit-pinned userscript loader
 
 **Added** · [Userscript](https://github.com/FredTinkle1/PokeclickerScripts/commit/65c777c52551926c808c4f18a60cf55d19c691ec)
